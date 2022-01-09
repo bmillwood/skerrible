@@ -1,0 +1,48 @@
+cabal-version:       2.4
+
+name:                server-client
+version:             0.1.0.0
+synopsis:            Server-client template
+-- description:
+-- bug-reports:
+license:             BSD-3-Clause
+license-file:        LICENSE
+author:              Ben Millwood
+maintainer:          thebenmachine+git@gmail.com
+-- copyright:
+-- category:
+-- extra-source-files:
+
+library
+  exposed-modules:
+    Protocol
+  ghc-options:         -Wall
+  build-depends:
+    aeson,
+    base,
+    containers,
+    text
+  hs-source-dirs:      protocol
+  default-language:    Haskell2010
+
+executable template-server
+  main-is:             Main.hs
+  other-modules:       
+  -- other-extensions:
+  ghc-options:         -Wall
+  build-depends:
+    server-client,
+    aeson,
+    async,
+    base,
+    bytestring,
+    containers,
+    lens,
+    text,
+    wai,
+    wai-app-static,
+    wai-websockets,
+    warp,
+    websockets
+  hs-source-dirs:      server
+  default-language:    Haskell2010
