@@ -13,7 +13,7 @@ while sleep 1
 do
   if cabal build
   then
-    cabal run template-server -- server/static-root &
+    cabal run skerrible-server -- server/static-root &
     waitForSource
     jobs -x killGrandchild %%
     wait

@@ -1,8 +1,8 @@
 cabal-version:       2.4
 
-name:                server-client
+name:                skerrible
 version:             0.1.0.0
-synopsis:            Server-client template
+synopsis:            terrible word game
 -- description:
 -- bug-reports:
 license:             BSD-3-Clause
@@ -25,13 +25,13 @@ library
   hs-source-dirs:      protocol
   default-language:    Haskell2010
 
-executable template-server
+executable skerrible-server
   main-is:             Main.hs
   other-modules:       
   -- other-extensions:
   ghc-options:         -Wall
   build-depends:
-    server-client,
+    skerrible,
     aeson,
     async,
     base,
