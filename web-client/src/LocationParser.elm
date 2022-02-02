@@ -22,7 +22,7 @@ queryParser =
 
 defaults =
   { error = Nothing
-  , endpoint = "ws://localhost:45286"
+  , endpoint = "ws://localhost:4170"
   , username = ""
   , autoLogin = False
   }

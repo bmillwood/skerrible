@@ -9,7 +9,7 @@ import Data.Text (Text)
 import GHC.Generics
 
 portNumber :: (Num n) => n
-portNumber = 45286
+portNumber = 4170
 
 data FromClient
   = LoginRequest { loginRequestName :: Text }
