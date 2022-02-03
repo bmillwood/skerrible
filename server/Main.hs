@@ -8,7 +8,6 @@ import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import qualified Data.Set as Set
-import Data.Set (Set)
 import Data.Text (Text)
 import Data.Void
 import System.Environment (getArgs)
@@ -20,13 +19,14 @@ import qualified Network.Wai.Handler.Warp as Warp
 import qualified Network.Wai.Handler.WebSockets as WaiWS
 import qualified Network.WebSockets as WS
 
+import Game
 import Protocol
 
 data ServerState
-  = ServerState{ folksStore :: MVar (Set Text), broadcast :: Chan ToClient }
+  = ServerState{ gameStore :: MVar GameState, broadcast :: Chan ToClient }
 
 newServerState :: IO ServerState
-newServerState = ServerState <$> newMVar Set.empty <*> newChan
+newServerState = ServerState <$> newMVar newGame <*> newChan
 
 main :: IO ()
 main = do
@@ -78,21 +78,21 @@ sendBroadcast ServerState{ broadcast } msg = do
   writeChan broadcast msg
 
 loggedIn :: ServerState -> WS.Connection -> Text -> IO ()
-loggedIn state@ServerState{ folksStore } conn username = do
+loggedIn state@ServerState{ gameStore } conn username = do
   print ("logged in", username)
-  modifyMVar_ folksStore $ \folks -> do
-    let newFolks = Set.insert username folks
+  modifyMVar_ gameStore $ \game -> do
+    let newFolks = Set.insert username (folks game)
     sendBroadcast state Folks{ loggedInOthers = newFolks }
-    return newFolks
+    return game{ folks = newFolks }
   (readDoesNotReturn, neitherDoesWrite) <- concurrently
     (memberRead state conn username)
     (writeThread state conn username)
     `onException` do
-      modifyMVar_ folksStore $ \folks -> do
+      modifyMVar_ gameStore $ \game -> do
         print ("disconnected", username)
-        let newFolks = Set.delete username folks
+        let newFolks = Set.delete username (folks game)
         sendBroadcast state Folks{ loggedInOthers = newFolks }
-        return newFolks
+        return game{ folks = newFolks }
   () <- absurd readDoesNotReturn
   absurd neitherDoesWrite
 
@@ -106,7 +106,8 @@ memberRead serverState conn username = forever $ do
       sendBroadcast serverState Message{ msgSentBy = username, msgContent = msgToSend }
 
 writeThread :: ServerState -> WS.Connection -> Text -> IO Void
-writeThread ServerState{ folksStore, broadcast } conn _username = do
-  withMVar folksStore $ \folks -> sendToClient conn Folks{ loggedInOthers = folks }
+writeThread ServerState{ gameStore, broadcast } conn _username = do
+  withMVar gameStore $ \game ->
+    sendToClient conn Folks{ loggedInOthers = folks game }
   forever $ do
     sendToClient conn =<< readChan broadcast

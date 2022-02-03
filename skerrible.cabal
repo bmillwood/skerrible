@@ -27,7 +27,7 @@ library
 
 executable skerrible-server
   main-is:             Main.hs
-  other-modules:       
+  other-modules:       Game
   -- other-extensions:
   ghc-options:         -Wall
   build-depends:
