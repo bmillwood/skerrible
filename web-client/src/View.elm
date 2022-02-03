@@ -45,6 +45,12 @@ viewPreLogin { loginState, loginForm } =
     , Html.p [] [ submitButton ]
     ]
 
+viewBoard : Model.Board -> Html Msg.OkMsg
+viewBoard board =
+  Html.table
+    []
+    []
+
 viewChatting : Model.ChattingState -> Html Msg.OkMsg
 viewChatting { folks, me, messageEntry, history } =
   let
@@ -107,8 +113,10 @@ view { error, state } =
       [ case state of
           Model.PreLogin preLogin ->
             Html.map (Ok << Msg.PreLogin) (viewPreLogin preLogin)
-          Model.Chatting chatting ->
-            Html.map Ok (viewChatting chatting)
+          Model.InGame { chat, board } ->
+            Html.map Ok (
+                Html.div [] [viewBoard board, viewChatting chat]
+              )
       ]
   in
   Html.div [] (errorDisplay ++ stateDisplay)

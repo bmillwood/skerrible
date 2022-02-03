@@ -1,6 +1,23 @@
 module Model exposing (..)
 
+import Array exposing (Array)
 import Set exposing (Set)
+
+type alias Tile =
+  { char : Char
+  , score : Int
+  }
+
+type alias Square =
+  { letterMult : Int
+  , wordMult : Int
+  , tile : Maybe Tile
+  }
+
+type alias Board = Array (Array Square)
+
+emptyBoard : Board
+emptyBoard = Array.empty
 
 type alias Chat =
   { sender : String
@@ -38,7 +55,7 @@ type alias ChattingState =
 
 type State
   = PreLogin PreLoginState
-  | Chatting ChattingState
+  | InGame { chat : ChattingState, board : Board }
 
 type alias Model =
   { error : Maybe String

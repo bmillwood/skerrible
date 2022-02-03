@@ -47,11 +47,14 @@ update msg model =
           )
         loggedIn folks =
           ( { model | state =
-                Model.Chatting
-                  { folks = folks
-                  , me = preLogin.loginForm.username
-                  , messageEntry = ""
-                  , history = []
+                Model.InGame
+                  { chat =
+                    { folks = folks
+                    , me = preLogin.loginForm.username
+                    , messageEntry = ""
+                    , history = []
+                    }
+                  , board = Model.emptyBoard
                   }
             }
           , Cmd.none
@@ -78,34 +81,34 @@ update msg model =
             Msg.Accepted folks -> loggedIn folks
             Msg.Failed error ->
               failed error
-    Model.Chatting chatting ->
+    Model.InGame ({ chat, board } as game) ->
       let
-        set newChatting = { model | state = Model.Chatting newChatting }
+        set newChatting = { model | state = Model.InGame { game | chat = newChatting } }
         error errorMsg = ( { model | error = Just errorMsg }, Cmd.none )
       in
       case msg of
         Err errorMsg -> error (Msg.errorToString errorMsg)
         Ok (Msg.PreLogin _) -> ( model, Cmd.none )
-        Ok (Msg.ReceiveMessage chat) ->
-          ( set { chatting | history = Model.Chatted chat :: chatting.history }
+        Ok (Msg.ReceiveMessage chatMsg) ->
+          ( set { chat | history = Model.Chatted chatMsg :: chat.history }
           , Cmd.none
           )
         Ok (Msg.ComposeMessage composed) ->
-          ( set { chatting | messageEntry = composed }, Cmd.none )
+          ( set { chat | messageEntry = composed }, Cmd.none )
         Ok (Msg.SendMessage message) ->
-          ( set { chatting | messageEntry = "" }
+          ( set { chat | messageEntry = "" }
           , Ports.chat message
           )
         Ok (Msg.NewFolks newFolks) ->
           let
             added =
-              Set.diff newFolks chatting.folks
+              Set.diff newFolks chat.folks
               |> Set.toList |> List.map Model.Joined
             removed =
-              Set.diff chatting.folks newFolks
+              Set.diff chat.folks newFolks
               |> Set.toList |> List.map Model.Left
           in
-          ( set { chatting | history = added ++ removed ++ chatting.history }
+          ( set { chat | history = added ++ removed ++ chat.history }
           , Cmd.none
           )
 
