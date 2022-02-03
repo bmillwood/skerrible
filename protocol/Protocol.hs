@@ -15,7 +15,7 @@ portNumber = 4170
 data Tile =
   Tile
     { tileChar :: Char
-    , tileScore :: Rational
+    , tileScore :: Integer
     } deriving (Generic, Show)
 
 instance Aeson.FromJSON Tile
@@ -23,9 +23,9 @@ instance Aeson.ToJSON Tile
 
 data Square =
   Square
-    { letterMult :: Rational
-    , wordMult :: Rational
-    , squareTile :: Tile
+    { letterMult :: Integer
+    , wordMult :: Integer
+    , squareTile :: Maybe Tile
     } deriving (Generic, Show)
 
 instance Aeson.FromJSON Square
