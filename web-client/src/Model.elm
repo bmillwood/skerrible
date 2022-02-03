@@ -14,6 +14,9 @@ type alias Square =
   , tile : Maybe Tile
   }
 
+emptySquare : Square
+emptySquare = { letterMult = 1, wordMult = 1, tile = Nothing }
+
 type alias Board = Array (Array Square)
 
 emptyBoard : Board

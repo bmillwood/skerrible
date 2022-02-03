@@ -1,5 +1,6 @@
 module View exposing (view)
 
+import Array
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
@@ -47,9 +48,26 @@ viewPreLogin { loginState, loginForm } =
 
 viewBoard : Model.Board -> Html Msg.OkMsg
 viewBoard board =
+  let
+    colorForMult n =
+      case n of
+        3 -> "red"
+        2 -> "pink"
+        _ -> "lightgrey"
+    tileText { char, score } = String.fromChar char
+    square { letterMult, wordMult, tile } =
+      Html.td
+        [ Attributes.style "background-color" (colorForMult wordMult)
+        , Attributes.style "width" "1em"
+        , Attributes.style "height" "1em"
+        , Attributes.style "text-align" "center"
+        ]
+        [ Html.text (Maybe.withDefault "" (Maybe.map tileText tile)) ]
+    tableRow row = Html.tr [] (List.map square (Array.toList row))
+  in
   Html.table
     []
-    []
+    (List.map tableRow (Array.toList board))
 
 viewChatting : Model.ChattingState -> Html Msg.OkMsg
 viewChatting { folks, me, messageEntry, history } =

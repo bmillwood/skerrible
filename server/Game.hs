@@ -14,7 +14,7 @@ boardHeight = 15
 
 squareAt :: Pos -> Square
 squareAt (Pos i j)
-  | isPos 1 1 = emptySquare 1 3
+  | isPos 1 1 || isPos 1 8 || isPos 8 1 = emptySquare 1 3
   | isPos 8 8 = emptySquare 1 2
   | otherwise = emptySquare 1 1
   where

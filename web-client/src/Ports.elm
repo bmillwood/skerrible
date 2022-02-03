@@ -1,5 +1,6 @@
 port module Ports exposing (..)
 
+import Array
 import Dict exposing (Dict)
 import Json.Decode
 import Json.Encode
@@ -87,6 +88,7 @@ variant { name } values =
 type ServerMsg
   = Folks Model.Folks
   | Message Model.Chat
+  | UpdateBoard Model.Board
 
 type FromJS
   = ServerStatus ConnectionStatus
@@ -99,6 +101,34 @@ connectionStatus =
     [ ("connected", Connected)
     , ("disconnected", Disconnected)
     ]
+
+char : Json.Decode.Decoder Char
+char =
+  Json.Decode.string
+  |> Json.Decode.andThen (\s ->
+        case String.uncons s of
+          Nothing -> Json.Decode.fail "JSON char: empty string"
+          Just (c, r) ->
+            if not (String.isEmpty r)
+            then Json.Decode.fail <|
+              "JSON char: String " ++ Debug.toString s ++ " is not length 1"
+            else Json.Decode.succeed c
+      )
+
+tile : Json.Decode.Decoder Model.Tile
+tile =
+  Json.Decode.map2
+    Model.Tile
+    (Json.Decode.field "tileChar" char)
+    (Json.Decode.field "tileScore" Json.Decode.int)
+
+square : Json.Decode.Decoder Model.Square
+square =
+  Json.Decode.map3
+    Model.Square
+    (Json.Decode.field "letterMult" Json.Decode.int)
+    (Json.Decode.field "wordMult" Json.Decode.int)
+    (Json.Decode.field "squareTile" (Json.Decode.nullable tile))
 
 serverMsg : Json.Decode.Decoder ServerMsg
 serverMsg =
@@ -113,11 +143,40 @@ serverMsg =
         Model.Chat
         (Json.Decode.field "msgSentBy" Json.Decode.string)
         (Json.Decode.field "msgContent" Json.Decode.string)
+
+    posSquare =
+      Json.Decode.map3
+        (\i j s -> ((i, j), s))
+        (Json.Decode.index 0 (Json.Decode.index 0 Json.Decode.int))
+        (Json.Decode.index 0 (Json.Decode.index 1 Json.Decode.int))
+        (Json.Decode.index 1 square)
+    ofPosSquares posSquares =
+      case posSquares of
+        [] -> Model.emptyBoard
+        ((ai, aj), asq) :: _ ->
+          let
+            rowNumbers = List.map (\((i, _), _) -> i) posSquares
+            colNumbers = List.map (\((_, j), _) -> j) posSquares
+            top = List.foldl min ai rowNumbers
+            bottom = List.foldl max ai rowNumbers
+            left = List.foldl min aj colNumbers
+            right = List.foldl max aj colNumbers
+            width = right - left + 1
+            height = bottom - top + 1
+            posSqDict = Dict.fromList posSquares
+          in
+          Array.initialize height (\row ->
+            Array.initialize width (\col ->
+              Dict.get (row + top, col + left) posSqDict
+              |> Maybe.withDefault Model.emptySquare))
+
+    board = Json.Decode.map ofPosSquares (Json.Decode.list posSquare)
   in
   variant
     { name = "serverMsg" }
     [ ( "Folks", WithFieldsInline (Json.Decode.map Folks folks) )
     , ( "Message", WithFieldsInline (Json.Decode.map Message message) )
+    , ( "UpdateBoard", WithContents (Json.Decode.map UpdateBoard board) )
     ]
 
 fromJS : Json.Decode.Decoder FromJS
@@ -135,6 +194,7 @@ toMsg msgFromJS =
     ServerStatus Disconnected -> Err Msg.ServerDisconnected
     FromServer (Folks folks) -> Ok (Msg.NewFolks folks)
     FromServer (Message chatMsg) -> Ok (Msg.ReceiveMessage chatMsg)
+    FromServer (UpdateBoard board) -> Ok (Msg.UpdateBoard board)
 
 subscriptions : Model.Model -> Sub Msg
 subscriptions model =

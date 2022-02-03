@@ -17,6 +17,7 @@ type OkMsg
   | SendMessage String
   | ReceiveMessage Model.Chat
   | NewFolks Model.Folks
+  | UpdateBoard Model.Board
 
 type Error
   = ServerDisconnected

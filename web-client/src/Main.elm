@@ -66,6 +66,7 @@ update msg model =
         Ok (Msg.NewFolks folks) -> loggedIn folks
         Ok (Msg.ComposeMessage _) -> failed "Can't compose message before login!"
         Ok (Msg.SendMessage _) -> failed "Can't send message before login!"
+        Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
         Ok (Msg.PreLogin loginMsg) ->
           case loginMsg of
             Msg.Update newForm ->
@@ -98,6 +99,10 @@ update msg model =
         Ok (Msg.SendMessage message) ->
           ( set { chat | messageEntry = "" }
           , Ports.chat message
+          )
+        Ok (Msg.UpdateBoard newBoard) ->
+          ( { model | state = Model.InGame { game | board = newBoard } }
+          , Cmd.none
           )
         Ok (Msg.NewFolks newFolks) ->
           let

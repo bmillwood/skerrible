@@ -107,7 +107,8 @@ memberRead serverState conn username = forever $ do
 
 writeThread :: ServerState -> WS.Connection -> Text -> IO Void
 writeThread ServerState{ gameStore, broadcast } conn _username = do
-  withMVar gameStore $ \game ->
+  withMVar gameStore $ \game -> do
     sendToClient conn Folks{ loggedInOthers = folks game }
+    sendToClient conn (UpdateBoard (board game))
   forever $ do
     sendToClient conn =<< readChan broadcast
