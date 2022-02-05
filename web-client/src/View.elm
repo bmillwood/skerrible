@@ -46,6 +46,16 @@ viewPreLogin { loginState, loginForm } =
     , Html.p [] [ submitButton ]
     ]
 
+tileCell : { backgroundColor : String } -> Char -> Html msg
+tileCell { backgroundColor } char =
+  Html.td
+    [ Attributes.style "background-color" backgroundColor
+    , Attributes.style "width" "1.5em"
+    , Attributes.style "height" "1.5em"
+    , Attributes.style "text-align" "center"
+    ]
+    [ Html.text (String.fromChar char) ]
+
 viewBoard : Model.Board -> Html Msg.OkMsg
 viewBoard board =
   let
@@ -58,20 +68,34 @@ viewBoard board =
             3 -> "blue"
             2 -> "lightblue"
             _ -> "lightgrey"
-    tileText { char, score } = String.fromChar char
     square ({ letterMult, wordMult, tile } as sq) =
-      Html.td
-        [ Attributes.style "background-color" (colorForSquare sq)
-        , Attributes.style "width" "1em"
-        , Attributes.style "height" "1em"
-        , Attributes.style "text-align" "center"
-        ]
-        [ Html.text (Maybe.withDefault "" (Maybe.map tileText tile)) ]
-    tableRow row = Html.tr [] (List.map square (Array.toList row))
+      tileCell
+        { backgroundColor = colorForSquare sq }
+        (Maybe.withDefault ' ' (Maybe.map .char tile))
+    rowNumCell n = Html.th [ Attributes.scope "row" ] [ Html.text (String.fromInt (n + 1)) ]
+    tableRow rowNumber row = Html.tr [] (rowNumCell rowNumber :: List.map square (Array.toList row))
+    boardWidth = Array.foldl max 0 (Array.map Array.length board)
+    colLetter n = String.fromChar (Char.fromCode (Char.toCode 'A' + n))
+    colHeaders =
+      List.indexedMap
+        (\i () -> Html.th [ Attributes.scope "col" ] [ Html.text (colLetter i) ])
+        (List.repeat boardWidth ())
+    headerRow = Html.tr [] (Html.td [] [] :: colHeaders)
   in
   Html.table
     []
-    (List.map tableRow (Array.toList board))
+    (headerRow :: List.indexedMap tableRow (Array.toList board))
+
+viewRack : Model.Rack -> Html Msg.OkMsg
+viewRack rack =
+  let
+    rackTile tile = tileCell { backgroundColor = "beige" } tile.char
+  in
+  Html.table
+    [ Attributes.style "border" "1px solid black"
+    , Attributes.style "background-color" "green"
+    ]
+    [ Html.tr [] (List.map rackTile rack) ]
 
 viewChatting : Model.ChattingState -> Html Msg.OkMsg
 viewChatting { folks, me, messageEntry, history } =
@@ -88,6 +112,7 @@ viewChatting { folks, me, messageEntry, history } =
                 [ Events.onSubmit (Msg.SendMessage messageEntry) ]
                 [ Html.input
                     [ Attributes.type_ "text"
+                    , Attributes.placeholder "chat"
                     , Attributes.value messageEntry
                     , Events.onInput Msg.ComposeMessage
                     ]
@@ -135,9 +160,9 @@ view { error, state } =
       [ case state of
           Model.PreLogin preLogin ->
             Html.map (Ok << Msg.PreLogin) (viewPreLogin preLogin)
-          Model.InGame { chat, board } ->
+          Model.InGame { chat, board, rack } ->
             Html.map Ok (
-                Html.div [] [viewBoard board, viewChatting chat]
+                Html.div [] [viewBoard board, viewRack rack, viewChatting chat]
               )
       ]
   in
