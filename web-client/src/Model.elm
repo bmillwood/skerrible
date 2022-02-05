@@ -8,6 +8,8 @@ type alias Tile =
   , score : Int
   }
 
+type alias Rack = List Tile
+
 type alias Square =
   { letterMult : Int
   , wordMult : Int
@@ -58,7 +60,7 @@ type alias ChattingState =
 
 type State
   = PreLogin PreLoginState
-  | InGame { chat : ChattingState, board : Board }
+  | InGame { chat : ChattingState, board : Board, rack : Rack }
 
 type alias Model =
   { error : Maybe String

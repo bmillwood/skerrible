@@ -7,7 +7,7 @@ import qualified Data.Aeson as Aeson
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Text (Text)
-import GHC.Generics
+import GHC.Generics (Generic)
 
 portNumber :: (Num n) => n
 portNumber = 4170
@@ -20,6 +20,12 @@ data Tile =
 
 instance Aeson.FromJSON Tile
 instance Aeson.ToJSON Tile
+
+newtype Rack = Rack [Tile]
+  deriving (Generic, Show)
+
+instance Aeson.FromJSON Rack
+instance Aeson.ToJSON Rack
 
 data Square =
   Square
@@ -59,6 +65,7 @@ data ToClient
   = Folks { loggedInOthers :: Set Text }
   | Message { msgSentBy :: Text, msgContent :: Text }
   | UpdateBoard Board
+  | UpdateRack Rack
   deriving (Generic, Show)
 
 instance Aeson.FromJSON ToClient

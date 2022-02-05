@@ -18,6 +18,7 @@ type OkMsg
   | ReceiveMessage Model.Chat
   | NewFolks Model.Folks
   | UpdateBoard Model.Board
+  | UpdateRack Model.Rack
 
 type Error
   = ServerDisconnected

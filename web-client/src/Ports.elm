@@ -89,6 +89,7 @@ type ServerMsg
   = Folks Model.Folks
   | Message Model.Chat
   | UpdateBoard Model.Board
+  | UpdateRack Model.Rack
 
 type FromJS
   = ServerStatus ConnectionStatus
@@ -171,12 +172,15 @@ serverMsg =
               |> Maybe.withDefault Model.emptySquare))
 
     board = Json.Decode.map ofPosSquares (Json.Decode.list posSquare)
+
+    rack = Json.Decode.list tile
   in
   variant
     { name = "serverMsg" }
     [ ( "Folks", WithFieldsInline (Json.Decode.map Folks folks) )
     , ( "Message", WithFieldsInline (Json.Decode.map Message message) )
     , ( "UpdateBoard", WithContents (Json.Decode.map UpdateBoard board) )
+    , ( "UpdateRack", WithContents (Json.Decode.map UpdateRack rack) )
     ]
 
 fromJS : Json.Decode.Decoder FromJS
@@ -195,6 +199,7 @@ toMsg msgFromJS =
     FromServer (Folks folks) -> Ok (Msg.NewFolks folks)
     FromServer (Message chatMsg) -> Ok (Msg.ReceiveMessage chatMsg)
     FromServer (UpdateBoard board) -> Ok (Msg.UpdateBoard board)
+    FromServer (UpdateRack rack) -> Ok (Msg.UpdateRack rack)
 
 subscriptions : Model.Model -> Sub Msg
 subscriptions model =

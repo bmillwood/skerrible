@@ -110,5 +110,6 @@ writeThread ServerState{ gameStore, broadcast } conn _username = do
   withMVar gameStore $ \game -> do
     sendToClient conn Folks{ loggedInOthers = folks game }
     sendToClient conn (UpdateBoard (board game))
+    sendToClient conn (UpdateRack (Rack [Tile{ tileChar = 'A', tileScore = 1 }]))
   forever $ do
     sendToClient conn =<< readChan broadcast
