@@ -49,15 +49,19 @@ viewPreLogin { loginState, loginForm } =
 viewBoard : Model.Board -> Html Msg.OkMsg
 viewBoard board =
   let
-    colorForMult n =
-      case n of
+    colorForSquare sq =
+      case sq.wordMult of
         3 -> "red"
         2 -> "pink"
-        _ -> "lightgrey"
+        _ ->
+          case sq.letterMult of
+            3 -> "blue"
+            2 -> "lightblue"
+            _ -> "lightgrey"
     tileText { char, score } = String.fromChar char
-    square { letterMult, wordMult, tile } =
+    square ({ letterMult, wordMult, tile } as sq) =
       Html.td
-        [ Attributes.style "background-color" (colorForMult wordMult)
+        [ Attributes.style "background-color" (colorForSquare sq)
         , Attributes.style "width" "1em"
         , Attributes.style "height" "1em"
         , Attributes.style "text-align" "center"

@@ -14,15 +14,21 @@ boardHeight = 15
 
 squareAt :: Pos -> Square
 squareAt (Pos i j)
-  | isPos 1 1 || isPos 1 8 || isPos 8 1 = emptySquare 1 3
-  | isPos 8 8 = emptySquare 1 2
+  | any isPos [(1, 1), (1, 8)] = emptySquare 1 3
+  | any (\x -> isPos (x, x)) [2, 3, 4, 5, 8] = emptySquare 1 2
+  | any isPos [(2, 6), (6, 6)] = emptySquare 3 1
+  | any isPos [(1, 4), (3, 7), (4, 8), (7, 7)] = emptySquare 2 1
   | otherwise = emptySquare 1 1
   where
     emptySquare letterMult wordMult =
       Square { letterMult, wordMult, squareTile = Nothing }
-    isPos a b =
-      i `elem` [a, boardHeight + 1 - a]
-      && j `elem` [b, boardWidth + 1 - b]
+    isPos (a, b) =
+      let
+        as = [a, boardHeight + 1 - a]
+        bs = [b, boardWidth + 1 - b]
+      in
+      (i `elem` as && j `elem` bs) || (i `elem` bs && j `elem` as)
+
 
 emptyBoard :: Board
 emptyBoard =
