@@ -53,9 +53,42 @@ newtype Board = Board (Map Pos Square)
 instance Aeson.FromJSON Board
 instance Aeson.ToJSON Board
 
+data MoveDirection
+  = MoveRight
+  | MoveDown
+  deriving (Generic, Show)
+
+instance Aeson.FromJSON MoveDirection
+instance Aeson.ToJSON MoveDirection
+
+data Move =
+  Move
+    { startPos :: Pos
+    , direction :: MoveDirection
+    , tiles :: [Tile]
+    }
+  deriving (Generic, Show)
+
+instance Aeson.FromJSON Move
+instance Aeson.ToJSON Move
+
+data MoveError
+  = NotPlaying
+  | NotYourTurn
+  | OffBoard
+  | TilesDoNotMatchBoard
+  | YouDoNotHave [Tile]
+  | DoesNotConnect
+  | NotAWord [Move]
+  deriving (Generic, Show)
+
+instance Aeson.FromJSON MoveError
+instance Aeson.ToJSON MoveError
+
 data FromClient
   = LoginRequest { loginRequestName :: Text }
   | Chat { msgToSend :: Text }
+  | MakeMove Move
   deriving (Generic, Show)
 
 instance Aeson.FromJSON FromClient
@@ -66,6 +99,7 @@ data ToClient
   | Message { msgSentBy :: Text, msgContent :: Text }
   | UpdateBoard Board
   | UpdateRack Rack
+  | MoveFailed MoveError
   deriving (Generic, Show)
 
 instance Aeson.FromJSON ToClient

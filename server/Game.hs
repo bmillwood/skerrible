@@ -12,6 +12,9 @@ boardWidth, boardHeight :: Integer
 boardWidth = 15
 boardHeight = 15
 
+isValidPos :: Pos -> Bool
+isValidPos (Pos i j) = i >= 1 && j >= 1 && i <= boardHeight && j <= boardWidth
+
 squareAt :: Pos -> Square
 squareAt (Pos i j)
   | any isPos [(1, 1), (1, 8)] = emptySquare 1 3
@@ -36,9 +39,20 @@ emptyBoard =
   where
     allPositions =
       [ Pos i j
-      | i <- [1 .. boardWidth]
-      , j <- [1 .. boardHeight]
+      | i <- [1 .. boardHeight]
+      , j <- [1 .. boardWidth]
       ]
+
+applyMove :: Move -> Board -> Either MoveError Board
+applyMove Move{ startPos, direction, tiles } (Board board)
+  | any (not . isValidPos . fst) posTiles = Left OffBoard
+  | otherwise = Right (Board (foldl applyTile board posTiles))
+  where
+    goPos MoveRight n (Pos i j) = Pos i (j + n)
+    goPos MoveDown  n (Pos i j) = Pos (i + n) j
+    posTiles = [(goPos direction k startPos, tile) | (k, tile) <- zip [0..] tiles]
+    applyTile oldBoard (pos, tile) =
+      Map.adjust (\sq -> sq{ squareTile = Just tile }) pos oldBoard
 
 data GameState =
   GameState

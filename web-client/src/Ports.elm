@@ -49,6 +49,34 @@ chat message =
     ]
   |> send
 
+encodeDirection : Model.MoveDirection -> Json.Encode.Value
+encodeDirection d =
+  Json.Encode.string (
+    case d of
+      Model.MoveRight -> "MoveRight"
+      Model.MoveDown -> "MoveDown"
+  )
+
+encodeTile : Model.Tile -> Json.Encode.Value
+encodeTile { char, score } =
+  Json.Encode.object
+    [ ( "tileChar", Json.Encode.string (String.fromChar char) )
+    , ( "tileScore", Json.Encode.int score )
+    ]
+
+sendMove : Model.Move -> Cmd msg
+sendMove { startPos, direction, tiles } =
+  let
+    (si, sj) = startPos
+  in
+  Json.Encode.object
+    [ ( "startPos", Json.Encode.list Json.Encode.int [si, sj] )
+    , ( "direction", encodeDirection direction )
+    , ( "tiles", Json.Encode.list encodeTile tiles )
+    ]
+  |> contentsWithTag "MakeMove"
+  |> send
+
 encodeNullable : (a -> Json.Encode.Value) -> Maybe a -> Json.Encode.Value
 encodeNullable encode m = Maybe.withDefault Json.Encode.null (Maybe.map encode m)
 
@@ -103,8 +131,8 @@ connectionStatus =
     , ("disconnected", Disconnected)
     ]
 
-char : Json.Decode.Decoder Char
-char =
+decodeChar : Json.Decode.Decoder Char
+decodeChar =
   Json.Decode.string
   |> Json.Decode.andThen (\s ->
         case String.uncons s of
@@ -120,7 +148,7 @@ tile : Json.Decode.Decoder Model.Tile
 tile =
   Json.Decode.map2
     Model.Tile
-    (Json.Decode.field "tileChar" char)
+    (Json.Decode.field "tileChar" decodeChar)
     (Json.Decode.field "tileScore" Json.Decode.int)
 
 square : Json.Decode.Decoder Model.Square
@@ -165,11 +193,13 @@ serverMsg =
             width = right - left + 1
             height = bottom - top + 1
             posSqDict = Dict.fromList posSquares
+            squares =
+              Array.initialize height (\row ->
+                Array.initialize width (\col ->
+                  Dict.get (row + top, col + left) posSqDict
+                  |> Maybe.withDefault Model.emptySquare))
           in
-          Array.initialize height (\row ->
-            Array.initialize width (\col ->
-              Dict.get (row + top, col + left) posSqDict
-              |> Maybe.withDefault Model.emptySquare))
+          { topLeft = (top, left), squares = squares }
 
     board = Json.Decode.map ofPosSquares (Json.Decode.list posSquare)
 

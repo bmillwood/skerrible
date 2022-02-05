@@ -56,25 +56,31 @@ tileCell { backgroundColor } char =
     ]
     [ Html.text (String.fromChar char) ]
 
+tileColor : String
+tileColor = "beige"
+
 viewBoard : Model.Board -> Html Msg.OkMsg
-viewBoard board =
+viewBoard { topLeft, squares } =
   let
     colorForSquare sq =
-      case sq.wordMult of
-        3 -> "red"
-        2 -> "pink"
-        _ ->
-          case sq.letterMult of
-            3 -> "blue"
-            2 -> "lightblue"
-            _ -> "lightgrey"
+      case sq.tile of
+        Just _ -> tileColor
+        Nothing ->
+          case sq.wordMult of
+            3 -> "red"
+            2 -> "pink"
+            _ ->
+              case sq.letterMult of
+                3 -> "blue"
+                2 -> "lightblue"
+                _ -> "lightgrey"
     square ({ letterMult, wordMult, tile } as sq) =
       tileCell
         { backgroundColor = colorForSquare sq }
         (Maybe.withDefault ' ' (Maybe.map .char tile))
     rowNumCell n = Html.th [ Attributes.scope "row" ] [ Html.text (String.fromInt (n + 1)) ]
     tableRow rowNumber row = Html.tr [] (rowNumCell rowNumber :: List.map square (Array.toList row))
-    boardWidth = Array.foldl max 0 (Array.map Array.length board)
+    boardWidth = Array.foldl max 0 (Array.map Array.length squares)
     colLetter n = String.fromChar (Char.fromCode (Char.toCode 'A' + n))
     colHeaders =
       List.indexedMap
@@ -84,12 +90,12 @@ viewBoard board =
   in
   Html.table
     []
-    (headerRow :: List.indexedMap tableRow (Array.toList board))
+    (headerRow :: List.indexedMap tableRow (Array.toList squares))
 
 viewRack : Model.Rack -> Html Msg.OkMsg
 viewRack rack =
   let
-    rackTile tile = tileCell { backgroundColor = "beige" } tile.char
+    rackTile tile = tileCell { backgroundColor = tileColor } tile.char
   in
   Html.table
     [ Attributes.style "border" "1px solid black"
@@ -156,13 +162,34 @@ view { error, state } =
               ]
               [ Html.text errorMsg ] ]
 
+    sendTestMove =
+      Msg.SendMove
+        { startPos = (8, 5)
+        , direction = Model.MoveRight
+        , tiles =
+            [ { char = 'A', score = 1 }
+            , { char = 'M', score = 2 }
+            , { char = 'B', score = 3 }
+            , { char = 'E', score = 1 }
+            , { char = 'R', score = 1 }
+            ]
+        }
+
     stateDisplay =
       [ case state of
           Model.PreLogin preLogin ->
             Html.map (Ok << Msg.PreLogin) (viewPreLogin preLogin)
           Model.InGame { chat, board, rack } ->
             Html.map Ok (
-                Html.div [] [viewBoard board, viewRack rack, viewChatting chat]
+                Html.div
+                  []
+                  [ viewBoard board
+                  , Html.button
+                      [ Events.onClick sendTestMove ]
+                      [ Html.text "Test move" ]
+                  , viewRack rack
+                  , viewChatting chat
+                  ]
               )
       ]
   in

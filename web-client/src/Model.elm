@@ -19,10 +19,23 @@ type alias Square =
 emptySquare : Square
 emptySquare = { letterMult = 1, wordMult = 1, tile = Nothing }
 
-type alias Board = Array (Array Square)
+type alias Board =
+  { topLeft : (Int, Int)
+  , squares : Array (Array Square)
+  }
 
 emptyBoard : Board
-emptyBoard = Array.empty
+emptyBoard = { topLeft = (0, 0), squares = Array.empty }
+
+type MoveDirection
+  = MoveRight
+  | MoveDown
+
+type alias Move =
+  { startPos : (Int, Int)
+  , direction : MoveDirection
+  , tiles : List Tile
+  }
 
 type alias Chat =
   { sender : String

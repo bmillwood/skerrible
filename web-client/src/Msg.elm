@@ -19,6 +19,7 @@ type OkMsg
   | NewFolks Model.Folks
   | UpdateBoard Model.Board
   | UpdateRack Model.Rack
+  | SendMove Model.Move
 
 type Error
   = ServerDisconnected

@@ -85,7 +85,7 @@ loggedIn state@ServerState{ gameStore } conn username = do
     sendBroadcast state Folks{ loggedInOthers = newFolks }
     return game{ folks = newFolks }
   (readDoesNotReturn, neitherDoesWrite) <- concurrently
-    (memberRead state conn username)
+    (playerRead state conn username)
     (writeThread state conn username)
     `onException` do
       modifyMVar_ gameStore $ \game -> do
@@ -96,14 +96,23 @@ loggedIn state@ServerState{ gameStore } conn username = do
   () <- absurd readDoesNotReturn
   absurd neitherDoesWrite
 
-memberRead :: ServerState -> WS.Connection -> Text -> IO Void
-memberRead serverState conn username = forever $ do
+playerRead :: ServerState -> WS.Connection -> Text -> IO Void
+playerRead serverState conn username = forever $ do
   msg <- readFromClient conn
   case msg of
     Nothing -> return ()
     Just LoginRequest{} -> print ("unexpected second login", username, msg)
     Just Chat{ msgToSend } ->
       sendBroadcast serverState Message{ msgSentBy = username, msgContent = msgToSend }
+    Just (MakeMove move) ->
+      modifyMVar_ (gameStore serverState) $ \game ->
+        case applyMove move (board game) of
+          Right newBoard -> do
+            sendBroadcast serverState (UpdateBoard newBoard)
+            return game{ board = newBoard }
+          Left moveError -> do
+            sendToClient conn (MoveFailed moveError)
+            return game
 
 writeThread :: ServerState -> WS.Connection -> Text -> IO Void
 writeThread ServerState{ gameStore, broadcast } conn _username = do

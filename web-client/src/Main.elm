@@ -69,6 +69,7 @@ update msg model =
         Ok (Msg.SendMessage _) -> failed "Can't send message before login!"
         Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
         Ok (Msg.UpdateRack _) -> failed "Unexpected rack before login!"
+        Ok (Msg.SendMove _) -> failed "Can't send move before login!"
         Ok (Msg.PreLogin loginMsg) ->
           case loginMsg of
             Msg.Update newForm ->
@@ -102,6 +103,7 @@ update msg model =
           ( set { chat | messageEntry = "" }
           , Ports.chat message
           )
+        Ok (Msg.SendMove move) -> ( model, Ports.sendMove move )
         Ok (Msg.UpdateBoard newBoard) ->
           ( { model | state = Model.InGame { game | board = newBoard } }
           , Cmd.none
