@@ -116,7 +116,7 @@ type ServerMsg
   | Message Model.Chat
   | UpdateBoard Model.Board
   | UpdateRack Model.Rack
-  | MoveFailed Model.MoveError
+  | MoveResult (Result Model.MoveError ())
 
 type FromJS
   = ServerStatus ConnectionStatus
@@ -136,6 +136,9 @@ tile =
     Model.Tile
     (Json.Decode.field "tileChar" KeyHandler.decodeChar)
     (Json.Decode.field "tileScore" Json.Decode.int)
+
+rack : Json.Decode.Decoder Model.Rack
+rack = Json.Decode.list tile
 
 square : Json.Decode.Decoder Model.Square
 square =
@@ -161,6 +164,22 @@ move =
     (Json.Decode.field "startPos" (Json.Decode.index 1 Json.Decode.int))
     (Json.Decode.field "direction" moveDirection)
     (Json.Decode.field "tiles" (Json.Decode.list tile))
+
+eitherResult : Json.Decode.Decoder err -> Json.Decode.Decoder ok -> Json.Decode.Decoder (Result err ok)
+eitherResult decodeErr decodeOk =
+  let
+    ofSides (left, right) =
+      case (left, right) of
+        (Nothing, Nothing) -> Json.Decode.fail "eitherResult: neither Left nor Right"
+        (Just _, Just _) -> Json.Decode.fail "eitherResult: both Left and Right"
+        (Just err, Nothing) -> Json.Decode.succeed (Err err)
+        (Nothing, Just ok) -> Json.Decode.succeed (Ok ok)
+  in
+  Json.Decode.map2
+    (\x y -> (x, y))
+    (Json.Decode.maybe (Json.Decode.field "Left" decodeErr))
+    (Json.Decode.maybe (Json.Decode.field "Right" decodeOk))
+  |> Json.Decode.andThen ofSides
 
 serverMsg : Json.Decode.Decoder ServerMsg
 serverMsg =
@@ -205,8 +224,6 @@ serverMsg =
           { top = top, left = left, squares = squares }
     board = Json.Decode.map ofPosSquares (Json.Decode.list posSquare)
 
-    rack = Json.Decode.list tile
-
     moveError =
       variant
         { name = "moveError" }
@@ -222,6 +239,8 @@ serverMsg =
           , WithContents (Json.Decode.map Model.NotAWord (Json.Decode.list move))
           )
         ]
+    moveOk = Json.Decode.succeed ()
+    moveResult = eitherResult moveError moveOk
   in
   variant
     { name = "serverMsg" }
@@ -229,7 +248,7 @@ serverMsg =
     , ( "Message", WithFieldsInline (Json.Decode.map Message message) )
     , ( "UpdateBoard", WithContents (Json.Decode.map UpdateBoard board) )
     , ( "UpdateRack", WithContents (Json.Decode.map UpdateRack rack) )
-    , ( "MoveFailed", WithContents (Json.Decode.map MoveFailed moveError) )
+    , ( "MoveResult", WithContents (Json.Decode.map MoveResult moveResult) )
     ]
 
 fromJS : Json.Decode.Decoder FromJS
@@ -248,8 +267,8 @@ toMsg msgFromJS =
     FromServer (Folks folks) -> Ok (Msg.NewFolks folks)
     FromServer (Message chatMsg) -> Ok (Msg.ReceiveMessage chatMsg)
     FromServer (UpdateBoard board) -> Ok (Msg.UpdateBoard board)
-    FromServer (UpdateRack rack) -> Ok (Msg.UpdateRack rack)
-    FromServer (MoveFailed moveError) -> Ok (Msg.MoveFailed moveError)
+    FromServer (UpdateRack newRack) -> Ok (Msg.UpdateRack newRack)
+    FromServer (MoveResult moveResult) -> Ok (Msg.MoveResult moveResult)
 
 subscriptions : Model.Model -> Sub Msg
 subscriptions model =

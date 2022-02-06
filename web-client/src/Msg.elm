@@ -22,7 +22,7 @@ type OkMsg
   | UpdateRack Model.Rack
   | ProposeMove (Maybe Model.Move)
   | SendMove
-  | MoveFailed Model.MoveError
+  | MoveResult (Result Model.MoveError ())
   | ClearMoveError
 
 type Error

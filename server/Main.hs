@@ -108,10 +108,11 @@ playerRead serverState conn username = forever $ do
       modifyMVar_ (gameStore serverState) $ \game ->
         case applyMove move (board game) of
           Right newBoard -> do
+            sendToClient conn (MoveResult (Right ()))
             sendBroadcast serverState (UpdateBoard newBoard)
             return game{ board = newBoard }
           Left moveError -> do
-            sendToClient conn (MoveFailed moveError)
+            sendToClient conn (MoveResult (Left moveError))
             return game
 
 writeThread :: ServerState -> WS.Connection -> Text -> IO Void

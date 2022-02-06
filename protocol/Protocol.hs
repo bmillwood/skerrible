@@ -99,7 +99,7 @@ data ToClient
   | Message { msgSentBy :: Text, msgContent :: Text }
   | UpdateBoard Board
   | UpdateRack Rack
-  | MoveFailed MoveError
+  | MoveResult (Either MoveError ())
   deriving (Generic, Show)
 
 instance Aeson.FromJSON ToClient

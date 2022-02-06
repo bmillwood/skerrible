@@ -78,7 +78,7 @@ update msg model =
         Ok (Msg.UpdateRack _) -> failed "Unexpected rack before login!"
         Ok (Msg.ProposeMove _) -> failed "Can't propose move before login!"
         Ok Msg.SendMove -> failed "Can't send move before login!"
-        Ok (Msg.MoveFailed _) -> failed "Unexpected move error before login!"
+        Ok (Msg.MoveResult _) -> failed "Unexpected move result before login!"
         Ok Msg.ClearMoveError -> (model, Cmd.none)
         Ok (Msg.PreLogin loginMsg) ->
           case loginMsg of
@@ -125,8 +125,10 @@ update msg model =
           case game.proposedMove of
             Nothing -> ( model, Cmd.none )
             Just move -> ( model, Ports.sendMove move )
-        Ok (Msg.MoveFailed moveError) ->
+        Ok (Msg.MoveResult (Err moveError)) ->
           ( setGame { game | moveError = Just moveError }, Cmd.none )
+        Ok (Msg.MoveResult (Ok ())) ->
+          ( setGame { game | moveError = Nothing, proposedMove = Nothing }, Cmd.none )
         Ok Msg.ClearMoveError ->
           ( setGame { game | moveError = Nothing }, Cmd.none )
         Ok (Msg.NewFolks newFolks) ->
