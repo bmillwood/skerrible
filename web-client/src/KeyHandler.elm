@@ -27,6 +27,7 @@ type Key
   = Letter Char
   | Backspace
   | Enter
+  | Escape
   | Other
 
 decodeKey : Json.Decode.Decoder Key
@@ -43,6 +44,8 @@ decodeKey =
       then Json.Decode.succeed Backspace
       else if s == "Enter"
       then Json.Decode.succeed Enter
+      else if s == "Escape"
+      then Json.Decode.succeed Escape
       else Json.Decode.map ofChar (charOfString s)
     )
 
@@ -59,6 +62,10 @@ updateMoveWithKey rack move key =
       case Dict.get c values of
         Nothing -> Msg.DoNothing
         Just v -> Msg.ProposeMove (Just { move | tiles = move.tiles ++ [{ char = c, score = v }] })
+    Escape ->
+      if List.isEmpty move.tiles
+      then Msg.ProposeMove Nothing
+      else Msg.DoNothing
     Other -> Msg.DoNothing
 
 handleKey : Model.Model -> Json.Decode.Decoder Msg.Msg
