@@ -1,11 +1,13 @@
 module Main exposing (main)
 
 import Browser
+import Browser.Events
 import Json.Decode
 import Html exposing (Html)
 import Set
 import Task
 
+import KeyHandler
 import LocationParser
 import Model exposing (Model)
 import Msg exposing (Msg)
@@ -66,6 +68,7 @@ update msg model =
       in
       case msg of
         Err error -> failed (Msg.errorToString error)
+        Ok Msg.DoNothing -> (model, Cmd.none)
         Ok (Msg.ReceiveMessage _) -> failed "Unexpected message before login!"
         Ok (Msg.NewFolks folks) -> loggedIn folks
         Ok (Msg.ComposeMessage _) -> failed "Can't compose message before login!"
@@ -97,6 +100,7 @@ update msg model =
       in
       case msg of
         Err errorMsg -> error (Msg.errorToString errorMsg)
+        Ok Msg.DoNothing -> (model, Cmd.none)
         Ok (Msg.PreLogin _) -> ( model, Cmd.none )
         Ok (Msg.ReceiveMessage chatMsg) ->
           ( setChat { chat | history = Model.Chatted chatMsg :: chat.history }
@@ -131,10 +135,12 @@ update msg model =
           , Cmd.none
           )
 
-
-
 subscriptions : Model -> Sub Msg
-subscriptions model = Ports.subscriptions model
+subscriptions model =
+  Sub.batch
+    [ Ports.subscriptions model
+    , Browser.Events.onKeyDown (KeyHandler.handleKey model)
+    ]
 
 main =
   Browser.element

@@ -6,6 +6,7 @@ import Json.Decode
 import Json.Encode
 import Set exposing (Set)
 
+import KeyHandler
 import Model
 import Msg exposing (Msg)
 
@@ -65,12 +66,9 @@ encodeTile { char, score } =
     ]
 
 sendMove : Model.Move -> Cmd msg
-sendMove { startPos, direction, tiles } =
-  let
-    (si, sj) = startPos
-  in
+sendMove { startRow, startCol, direction, tiles } =
   Json.Encode.object
-    [ ( "startPos", Json.Encode.list Json.Encode.int [si, sj] )
+    [ ( "startPos", Json.Encode.list Json.Encode.int [startRow, startCol] )
     , ( "direction", encodeDirection direction )
     , ( "tiles", Json.Encode.list encodeTile tiles )
     ]
@@ -131,24 +129,11 @@ connectionStatus =
     , ("disconnected", Disconnected)
     ]
 
-decodeChar : Json.Decode.Decoder Char
-decodeChar =
-  Json.Decode.string
-  |> Json.Decode.andThen (\s ->
-        case String.uncons s of
-          Nothing -> Json.Decode.fail "JSON char: empty string"
-          Just (c, r) ->
-            if not (String.isEmpty r)
-            then Json.Decode.fail <|
-              "JSON char: String " ++ Debug.toString s ++ " is not length 1"
-            else Json.Decode.succeed c
-      )
-
 tile : Json.Decode.Decoder Model.Tile
 tile =
   Json.Decode.map2
     Model.Tile
-    (Json.Decode.field "tileChar" decodeChar)
+    (Json.Decode.field "tileChar" KeyHandler.decodeChar)
     (Json.Decode.field "tileScore" Json.Decode.int)
 
 square : Json.Decode.Decoder Model.Square
@@ -199,7 +184,7 @@ serverMsg =
                   Dict.get (row + top, col + left) posSqDict
                   |> Maybe.withDefault Model.emptySquare))
           in
-          { topLeft = (top, left), squares = squares }
+          { top = top, left = left, squares = squares }
 
     board = Json.Decode.map ofPosSquares (Json.Decode.list posSquare)
 

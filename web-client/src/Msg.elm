@@ -12,7 +12,8 @@ type LoginFormMsg
   | Failed String
 
 type OkMsg
-  = PreLogin LoginFormMsg
+  = DoNothing
+  | PreLogin LoginFormMsg
   | ComposeMessage String
   | SendMessage String
   | ReceiveMessage Model.Chat

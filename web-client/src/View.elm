@@ -1,9 +1,11 @@
 module View exposing (view)
 
 import Array
+import Dict
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
+import Json.Decode
 
 import Model
 import Msg exposing (Msg)
@@ -46,16 +48,6 @@ viewPreLogin { loginState, loginForm } =
     , Html.p [] [ submitButton ]
     ]
 
-tileCell : { backgroundColor : String } -> Char -> Html msg
-tileCell { backgroundColor } char =
-  Html.td
-    [ Attributes.style "background-color" backgroundColor
-    , Attributes.style "width" "1.5em"
-    , Attributes.style "height" "1.5em"
-    , Attributes.style "text-align" "center"
-    ]
-    [ Html.text (String.fromChar char) ]
-
 tileStyle : List (Html.Attribute msg)
 tileStyle =
   [ Attributes.style "width" "1.5em"
@@ -66,34 +58,92 @@ tileStyle =
 tileColor : String
 tileColor = "beige"
 
-viewBoard : Model.Board -> Html Msg.OkMsg
-viewBoard { topLeft, squares } =
+viewBoard : Model.Board -> Maybe Model.Move -> Html Msg.OkMsg
+viewBoard { top, left, squares } proposedMove =
   let
-    square sq =
+    placedTile rowN colN =
+      case proposedMove of
+        Nothing -> Nothing
+        Just { startRow, startCol, direction, tiles } ->
+          case direction of
+            Model.MoveRight ->
+              if rowN == startRow && colN >= startCol
+              then List.head (List.drop (colN - startCol) tiles)
+              else Nothing
+            Model.MoveDown ->
+              if colN == startCol && rowN >= startRow
+              then List.head (List.drop (rowN - startRow) tiles)
+              else Nothing
+    square rowIx colIx sq =
       let
+        rowN = rowIx + top
+        colN = colIx + left
+        placed = placedTile rowN colN
+        isJust = Maybe.withDefault False << Maybe.map (always True)
+        tileHere = isJust sq.tile || isJust placed
         bgColor =
-          case sq.tile of
-            Just _ -> tileColor
-            Nothing ->
-              case sq.wordMult of
-                3 -> "#f77"
-                2 -> "#fcc"
-                _ ->
-                  case sq.letterMult of
-                    3 -> "#88f"
-                    2 -> "#bbf"
-                    _ -> "#ccc"
+          if tileHere
+          then tileColor
+          else
+            case sq.wordMult of
+              3 -> "#f77"
+              2 -> "#fcc"
+              _ ->
+                case sq.letterMult of
+                  3 -> "#88f"
+                  2 -> "#bbf"
+                  _ -> "#ccc"
+        redIfMove =
+          case placed of
+            Nothing -> []
+            Just _ -> [ Attributes.style "color" "#f00" ]
+        directionIfHere =
+          case proposedMove of
+            Nothing -> Nothing
+            Just { startRow, startCol, direction } ->
+              if startRow == rowN && startCol == colN
+              then Just direction
+              else Nothing
+        newMove direction =
+          { startRow = rowN, startCol = colN, direction = direction, tiles = [] }
         attributes =
-          [ [ Attributes.style "background-color" bgColor ]
+          [ [ Attributes.style "background-color" bgColor
+            , Events.onClick (
+                case proposedMove of
+                  Nothing -> Msg.ProposeMove (Just (newMove Model.MoveRight))
+                  Just { startRow, startCol, direction, tiles } ->
+                    if not (List.isEmpty tiles)
+                    then Msg.DoNothing
+                    else
+                      case directionIfHere of
+                        Nothing -> Msg.ProposeMove (Just (newMove Model.MoveRight))
+                        Just Model.MoveRight -> Msg.ProposeMove (Just (newMove Model.MoveDown))
+                        Just Model.MoveDown -> Msg.ProposeMove Nothing
+              )
+            ]
+          , redIfMove
           , tileStyle
           ] |> List.concat
-        char = Maybe.withDefault ' ' (Maybe.map .char sq.tile)
+        char =
+          case placed of
+            Nothing ->
+              case sq.tile of
+                Just t -> t.char
+                Nothing ->
+                  case directionIfHere of
+                    Nothing -> ' '
+                    Just Model.MoveRight -> '→'
+                    Just Model.MoveDown -> '↓'
+            Just tile -> tile.char
       in
       Html.td attributes [ Html.text (String.fromChar char) ]
     rowNumCell n = Html.th [ Attributes.scope "row" ] [ Html.text (String.fromInt (n + 1)) ]
-    tableRow rowNumber row = Html.tr [] (rowNumCell rowNumber :: List.map square (Array.toList row))
+    tableRow rowIx row =
+      Html.tr
+        []
+        (rowNumCell rowIx :: List.indexedMap (square rowIx) (Array.toList row))
     boardWidth = Array.foldl max 0 (Array.map Array.length squares)
-    colLetter n = String.fromChar (Char.fromCode (Char.toCode 'A' + n))
+    colLetter i = String.fromChar (Char.fromCode (Char.toCode 'A' + i))
     colHeaders =
       List.indexedMap
         (\i () -> Html.th [ Attributes.scope "col" ] [ Html.text (colLetter i) ])
@@ -187,7 +237,7 @@ view { error, state } =
             Html.map Ok (
                 Html.div
                   []
-                  [ viewBoard game.board
+                  [ viewBoard game.board game.proposedMove
                   , viewRack game.rack
                   , viewChatting chat
                   ]

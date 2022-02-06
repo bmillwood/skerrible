@@ -20,19 +20,21 @@ emptySquare : Square
 emptySquare = { letterMult = 1, wordMult = 1, tile = Nothing }
 
 type alias Board =
-  { topLeft : (Int, Int)
+  { top : Int
+  , left : Int
   , squares : Array (Array Square)
   }
 
 emptyBoard : Board
-emptyBoard = { topLeft = (0, 0), squares = Array.empty }
+emptyBoard = { top = 0, left = 0, squares = Array.empty }
 
 type MoveDirection
   = MoveRight
   | MoveDown
 
 type alias Move =
-  { startPos : (Int, Int)
+  { startRow : Int
+  , startCol : Int
   , direction : MoveDirection
   , tiles : List Tile
   }
