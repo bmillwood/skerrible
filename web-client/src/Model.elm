@@ -39,10 +39,20 @@ type alias Move =
   , tiles : List Tile
   }
 
+type MoveError
+  = NotPlaying
+  | NotYourTurn
+  | OffBoard
+  | TilesDoNotMatchBoard
+  | YouDoNotHave (List Tile)
+  | DoesNotConnect
+  | NotAWord (List Move)
+
 type alias Game =
   { board : Board
   , rack : Rack
   , proposedMove : Maybe Move
+  , moveError : Maybe MoveError
   }
 
 type alias Chat =

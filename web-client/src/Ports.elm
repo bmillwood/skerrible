@@ -116,6 +116,7 @@ type ServerMsg
   | Message Model.Chat
   | UpdateBoard Model.Board
   | UpdateRack Model.Rack
+  | MoveFailed Model.MoveError
 
 type FromJS
   = ServerStatus ConnectionStatus
@@ -143,6 +144,23 @@ square =
     (Json.Decode.field "letterMult" Json.Decode.int)
     (Json.Decode.field "wordMult" Json.Decode.int)
     (Json.Decode.field "squareTile" (Json.Decode.nullable tile))
+
+moveDirection : Json.Decode.Decoder Model.MoveDirection
+moveDirection =
+  plainVariant
+    { name = "moveDirection" }
+    [ ( "MoveRight", Model.MoveRight )
+    , ( "MoveDown", Model.MoveDown )
+    ]
+
+move : Json.Decode.Decoder Model.Move
+move =
+  Json.Decode.map4
+    Model.Move
+    (Json.Decode.field "startPos" (Json.Decode.index 0 Json.Decode.int))
+    (Json.Decode.field "startPos" (Json.Decode.index 1 Json.Decode.int))
+    (Json.Decode.field "direction" moveDirection)
+    (Json.Decode.field "tiles" (Json.Decode.list tile))
 
 serverMsg : Json.Decode.Decoder ServerMsg
 serverMsg =
@@ -185,10 +203,25 @@ serverMsg =
                   |> Maybe.withDefault Model.emptySquare))
           in
           { top = top, left = left, squares = squares }
-
     board = Json.Decode.map ofPosSquares (Json.Decode.list posSquare)
 
     rack = Json.Decode.list tile
+
+    moveError =
+      variant
+        { name = "moveError" }
+        [ ( "NotPlaying", Plain Model.NotPlaying )
+        , ( "NotYourTurn", Plain Model.NotYourTurn )
+        , ( "OffBoard", Plain Model.OffBoard )
+        , ( "TilesDoNotMatchBoard", Plain Model.TilesDoNotMatchBoard )
+        , ( "YouDoNotHave"
+          , WithContents (Json.Decode.map Model.YouDoNotHave (Json.Decode.list tile))
+          )
+        , ( "DoesNotConnect", Plain Model.DoesNotConnect )
+        , ( "NotAWord"
+          , WithContents (Json.Decode.map Model.NotAWord (Json.Decode.list move))
+          )
+        ]
   in
   variant
     { name = "serverMsg" }
@@ -196,6 +229,7 @@ serverMsg =
     , ( "Message", WithFieldsInline (Json.Decode.map Message message) )
     , ( "UpdateBoard", WithContents (Json.Decode.map UpdateBoard board) )
     , ( "UpdateRack", WithContents (Json.Decode.map UpdateRack rack) )
+    , ( "MoveFailed", WithContents (Json.Decode.map MoveFailed moveError) )
     ]
 
 fromJS : Json.Decode.Decoder FromJS
@@ -215,6 +249,7 @@ toMsg msgFromJS =
     FromServer (Message chatMsg) -> Ok (Msg.ReceiveMessage chatMsg)
     FromServer (UpdateBoard board) -> Ok (Msg.UpdateBoard board)
     FromServer (UpdateRack rack) -> Ok (Msg.UpdateRack rack)
+    FromServer (MoveFailed moveError) -> Ok (Msg.MoveFailed moveError)
 
 subscriptions : Model.Model -> Sub Msg
 subscriptions model =

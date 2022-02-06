@@ -22,6 +22,8 @@ type OkMsg
   | UpdateRack Model.Rack
   | ProposeMove (Maybe Model.Move)
   | SendMove
+  | MoveFailed Model.MoveError
+  | ClearMoveError
 
 type Error
   = ServerDisconnected

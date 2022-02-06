@@ -154,6 +154,26 @@ viewBoard { top, left, squares } proposedMove =
     []
     (headerRow :: List.indexedMap tableRow (Array.toList squares))
 
+viewError : Maybe Model.MoveError -> Html Msg.OkMsg
+viewError error =
+  let
+    text =
+      case error of
+        Nothing -> ""
+        Just Model.NotPlaying -> "The game is not in progress"
+        Just Model.NotYourTurn -> "It's not your turn!"
+        Just Model.OffBoard -> "Your move starts or ends off the edge of the board."
+        Just Model.TilesDoNotMatchBoard -> "The tiles you provided don't match the ones on the board."
+        Just (Model.YouDoNotHave _) -> "You don't have the letters necessary for that move."
+        Just Model.DoesNotConnect -> "Your move doesn't connect with existing tiles."
+        Just (Model.NotAWord _) -> "At least one of the words you made doesn't exist."
+  in
+  Html.div
+    [ Events.onClick Msg.ClearMoveError
+    , Attributes.style "color" "red"
+    ]
+    [ Html.text text ]
+
 viewRack : Model.Rack -> Html Msg.OkMsg
 viewRack rack =
   let
@@ -238,6 +258,7 @@ view { error, state } =
                 Html.div
                   []
                   [ viewBoard game.board game.proposedMove
+                  , viewError game.moveError
                   , viewRack game.rack
                   , viewChatting chat
                   ]

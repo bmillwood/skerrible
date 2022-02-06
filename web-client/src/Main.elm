@@ -60,6 +60,7 @@ update msg model =
                       { board = Model.emptyBoard
                       , rack = []
                       , proposedMove = Nothing
+                      , moveError = Nothing
                       }
                   }
             }
@@ -69,14 +70,16 @@ update msg model =
       case msg of
         Err error -> failed (Msg.errorToString error)
         Ok Msg.DoNothing -> (model, Cmd.none)
-        Ok (Msg.ReceiveMessage _) -> failed "Unexpected message before login!"
-        Ok (Msg.NewFolks folks) -> loggedIn folks
         Ok (Msg.ComposeMessage _) -> failed "Can't compose message before login!"
         Ok (Msg.SendMessage _) -> failed "Can't send message before login!"
+        Ok (Msg.ReceiveMessage _) -> failed "Unexpected message before login!"
+        Ok (Msg.NewFolks folks) -> loggedIn folks
         Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
         Ok (Msg.UpdateRack _) -> failed "Unexpected rack before login!"
         Ok (Msg.ProposeMove _) -> failed "Can't propose move before login!"
         Ok Msg.SendMove -> failed "Can't send move before login!"
+        Ok (Msg.MoveFailed _) -> failed "Unexpected move error before login!"
+        Ok Msg.ClearMoveError -> (model, Cmd.none)
         Ok (Msg.PreLogin loginMsg) ->
           case loginMsg of
             Msg.Update newForm ->
@@ -102,26 +105,30 @@ update msg model =
         Err errorMsg -> error (Msg.errorToString errorMsg)
         Ok Msg.DoNothing -> (model, Cmd.none)
         Ok (Msg.PreLogin _) -> ( model, Cmd.none )
-        Ok (Msg.ReceiveMessage chatMsg) ->
-          ( setChat { chat | history = Model.Chatted chatMsg :: chat.history }
-          , Cmd.none
-          )
         Ok (Msg.ComposeMessage composed) ->
           ( setChat { chat | messageEntry = composed }, Cmd.none )
         Ok (Msg.SendMessage message) ->
           ( setChat { chat | messageEntry = "" }
           , Ports.chat message
           )
+        Ok (Msg.ReceiveMessage chatMsg) ->
+          ( setChat { chat | history = Model.Chatted chatMsg :: chat.history }
+          , Cmd.none
+          )
+        Ok (Msg.UpdateBoard newBoard) ->
+          ( setGame { game | board = newBoard }, Cmd.none )
+        Ok (Msg.UpdateRack newRack) ->
+          ( setGame { game | rack = newRack }, Cmd.none )
         Ok (Msg.ProposeMove move) ->
           ( setGame { game | proposedMove = move }, Cmd.none )
         Ok Msg.SendMove ->
           case game.proposedMove of
             Nothing -> ( model, Cmd.none )
             Just move -> ( model, Ports.sendMove move )
-        Ok (Msg.UpdateBoard newBoard) ->
-          ( setGame { game | board = newBoard }, Cmd.none )
-        Ok (Msg.UpdateRack newRack) ->
-          ( setGame { game | rack = newRack }, Cmd.none )
+        Ok (Msg.MoveFailed moveError) ->
+          ( setGame { game | moveError = Just moveError }, Cmd.none )
+        Ok Msg.ClearMoveError ->
+          ( setGame { game | moveError = Nothing }, Cmd.none )
         Ok (Msg.NewFolks newFolks) ->
           let
             added =
