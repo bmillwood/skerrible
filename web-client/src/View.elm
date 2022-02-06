@@ -76,13 +76,13 @@ viewBoard { topLeft, squares } =
             Just _ -> tileColor
             Nothing ->
               case sq.wordMult of
-                3 -> "red"
-                2 -> "pink"
+                3 -> "#f77"
+                2 -> "#fcc"
                 _ ->
                   case sq.letterMult of
-                    3 -> "blue"
-                    2 -> "lightblue"
-                    _ -> "lightgrey"
+                    3 -> "#88f"
+                    2 -> "#bbf"
+                    _ -> "#ccc"
         attributes =
           [ [ Attributes.style "background-color" bgColor ]
           , tileStyle
