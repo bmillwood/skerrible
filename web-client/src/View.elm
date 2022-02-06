@@ -56,28 +56,40 @@ tileCell { backgroundColor } char =
     ]
     [ Html.text (String.fromChar char) ]
 
+tileStyle : List (Html.Attribute msg)
+tileStyle =
+  [ Attributes.style "width" "1.5em"
+  , Attributes.style "height" "1.5em"
+  , Attributes.style "text-align" "center"
+  ]
+
 tileColor : String
 tileColor = "beige"
 
 viewBoard : Model.Board -> Html Msg.OkMsg
 viewBoard { topLeft, squares } =
   let
-    colorForSquare sq =
-      case sq.tile of
-        Just _ -> tileColor
-        Nothing ->
-          case sq.wordMult of
-            3 -> "red"
-            2 -> "pink"
-            _ ->
-              case sq.letterMult of
-                3 -> "blue"
-                2 -> "lightblue"
-                _ -> "lightgrey"
-    square ({ letterMult, wordMult, tile } as sq) =
-      tileCell
-        { backgroundColor = colorForSquare sq }
-        (Maybe.withDefault ' ' (Maybe.map .char tile))
+    square sq =
+      let
+        bgColor =
+          case sq.tile of
+            Just _ -> tileColor
+            Nothing ->
+              case sq.wordMult of
+                3 -> "red"
+                2 -> "pink"
+                _ ->
+                  case sq.letterMult of
+                    3 -> "blue"
+                    2 -> "lightblue"
+                    _ -> "lightgrey"
+        attributes =
+          [ [ Attributes.style "background-color" bgColor ]
+          , tileStyle
+          ] |> List.concat
+        char = Maybe.withDefault ' ' (Maybe.map .char sq.tile)
+      in
+      Html.td attributes [ Html.text (String.fromChar char) ]
     rowNumCell n = Html.th [ Attributes.scope "row" ] [ Html.text (String.fromInt (n + 1)) ]
     tableRow rowNumber row = Html.tr [] (rowNumCell rowNumber :: List.map square (Array.toList row))
     boardWidth = Array.foldl max 0 (Array.map Array.length squares)
@@ -95,7 +107,12 @@ viewBoard { topLeft, squares } =
 viewRack : Model.Rack -> Html Msg.OkMsg
 viewRack rack =
   let
-    rackTile tile = tileCell { backgroundColor = tileColor } tile.char
+    attributes =
+      [ [ Attributes.style "background-color" tileColor ]
+      , tileStyle
+      ] |> List.concat
+    rackTile tile =
+      Html.td attributes [ Html.text (String.fromChar tile.char) ]
   in
   Html.table
     [ Attributes.style "border" "1px solid black"
