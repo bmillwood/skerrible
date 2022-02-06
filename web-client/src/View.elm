@@ -179,32 +179,16 @@ view { error, state } =
               ]
               [ Html.text errorMsg ] ]
 
-    sendTestMove =
-      Msg.SendMove
-        { startPos = (8, 5)
-        , direction = Model.MoveRight
-        , tiles =
-            [ { char = 'A', score = 1 }
-            , { char = 'M', score = 2 }
-            , { char = 'B', score = 3 }
-            , { char = 'E', score = 1 }
-            , { char = 'R', score = 1 }
-            ]
-        }
-
     stateDisplay =
       [ case state of
           Model.PreLogin preLogin ->
             Html.map (Ok << Msg.PreLogin) (viewPreLogin preLogin)
-          Model.InGame { chat, board, rack } ->
+          Model.InGame { chat, game } ->
             Html.map Ok (
                 Html.div
                   []
-                  [ viewBoard board
-                  , Html.button
-                      [ Events.onClick sendTestMove ]
-                      [ Html.text "Test move" ]
-                  , viewRack rack
+                  [ viewBoard game.board
+                  , viewRack game.rack
                   , viewChatting chat
                   ]
               )

@@ -37,6 +37,12 @@ type alias Move =
   , tiles : List Tile
   }
 
+type alias Game =
+  { board : Board
+  , rack : Rack
+  , proposedMove : Maybe Move
+  }
+
 type alias Chat =
   { sender : String
   , message : String
@@ -73,7 +79,7 @@ type alias ChattingState =
 
 type State
   = PreLogin PreLoginState
-  | InGame { chat : ChattingState, board : Board, rack : Rack }
+  | InGame { chat : ChattingState, game : Game }
 
 type alias Model =
   { error : Maybe String

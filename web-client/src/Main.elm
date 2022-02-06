@@ -49,13 +49,16 @@ update msg model =
           ( { model | state =
                 Model.InGame
                   { chat =
-                    { folks = folks
-                    , me = preLogin.loginForm.username
-                    , messageEntry = ""
-                    , history = []
-                    }
-                  , board = Model.emptyBoard
-                  , rack = []
+                      { folks = folks
+                      , me = preLogin.loginForm.username
+                      , messageEntry = ""
+                      , history = []
+                      }
+                  , game =
+                      { board = Model.emptyBoard
+                      , rack = []
+                      , proposedMove = Nothing
+                      }
                   }
             }
           , Cmd.none
@@ -69,7 +72,8 @@ update msg model =
         Ok (Msg.SendMessage _) -> failed "Can't send message before login!"
         Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
         Ok (Msg.UpdateRack _) -> failed "Unexpected rack before login!"
-        Ok (Msg.SendMove _) -> failed "Can't send move before login!"
+        Ok (Msg.ProposeMove _) -> failed "Can't propose move before login!"
+        Ok Msg.SendMove -> failed "Can't send move before login!"
         Ok (Msg.PreLogin loginMsg) ->
           case loginMsg of
             Msg.Update newForm ->
@@ -85,33 +89,35 @@ update msg model =
             Msg.Accepted folks -> loggedIn folks
             Msg.Failed error ->
               failed error
-    Model.InGame ({ chat, board } as game) ->
+    Model.InGame ({ chat, game } as inGame) ->
       let
-        set newChatting = { model | state = Model.InGame { game | chat = newChatting } }
+        setChat newChat = { model | state = Model.InGame { inGame | chat = newChat } }
+        setGame newGame = { model | state = Model.InGame { inGame | game = newGame } }
         error errorMsg = ( { model | error = Just errorMsg }, Cmd.none )
       in
       case msg of
         Err errorMsg -> error (Msg.errorToString errorMsg)
         Ok (Msg.PreLogin _) -> ( model, Cmd.none )
         Ok (Msg.ReceiveMessage chatMsg) ->
-          ( set { chat | history = Model.Chatted chatMsg :: chat.history }
+          ( setChat { chat | history = Model.Chatted chatMsg :: chat.history }
           , Cmd.none
           )
         Ok (Msg.ComposeMessage composed) ->
-          ( set { chat | messageEntry = composed }, Cmd.none )
+          ( setChat { chat | messageEntry = composed }, Cmd.none )
         Ok (Msg.SendMessage message) ->
-          ( set { chat | messageEntry = "" }
+          ( setChat { chat | messageEntry = "" }
           , Ports.chat message
           )
-        Ok (Msg.SendMove move) -> ( model, Ports.sendMove move )
+        Ok (Msg.ProposeMove move) ->
+          ( setGame { game | proposedMove = move }, Cmd.none )
+        Ok Msg.SendMove ->
+          case game.proposedMove of
+            Nothing -> ( model, Cmd.none )
+            Just move -> ( model, Ports.sendMove move )
         Ok (Msg.UpdateBoard newBoard) ->
-          ( { model | state = Model.InGame { game | board = newBoard } }
-          , Cmd.none
-          )
+          ( setGame { game | board = newBoard }, Cmd.none )
         Ok (Msg.UpdateRack newRack) ->
-          ( { model | state = Model.InGame { game | rack = newRack } }
-          , Cmd.none
-          )
+          ( setGame { game | rack = newRack }, Cmd.none )
         Ok (Msg.NewFolks newFolks) ->
           let
             added =
@@ -121,7 +127,7 @@ update msg model =
               Set.diff chat.folks newFolks
               |> Set.toList |> List.map Model.Left
           in
-          ( set { chat | history = added ++ removed ++ chat.history }
+          ( setChat { chat | history = added ++ removed ++ chat.history }
           , Cmd.none
           )
 

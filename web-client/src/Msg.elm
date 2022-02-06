@@ -19,7 +19,8 @@ type OkMsg
   | NewFolks Model.Folks
   | UpdateBoard Model.Board
   | UpdateRack Model.Rack
-  | SendMove Model.Move
+  | ProposeMove (Maybe Model.Move)
+  | SendMove
 
 type Error
   = ServerDisconnected
