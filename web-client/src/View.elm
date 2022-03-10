@@ -126,7 +126,8 @@ viewBoard { top, left, squares } proposedMove =
           ] |> List.concat
         char =
           case placed of
-            Nothing ->
+            Just (Model.PlaceTile tile) -> tile.char
+            _ ->
               case sq.tile of
                 Just t -> t.char
                 Nothing ->
@@ -134,7 +135,6 @@ viewBoard { top, left, squares } proposedMove =
                     Nothing -> ' '
                     Just Model.MoveRight -> '→'
                     Just Model.MoveDown -> '↓'
-            Just tile -> tile.char
       in
       Html.td attributes [ Html.text (String.fromChar char) ]
     rowNumCell n = Html.th [ Attributes.scope "row" ] [ Html.text (String.fromInt (n + 1)) ]
@@ -164,6 +164,7 @@ viewError error =
         Just Model.NotYourTurn -> "It's not your turn!"
         Just Model.OffBoard -> "Your move starts or ends off the edge of the board."
         Just Model.TilesDoNotMatchBoard -> "The tiles you provided don't match the ones on the board."
+        Just Model.NoPlacedTiles -> "Your move doesn't use any tiles from your rack."
         Just (Model.YouDoNotHave _) -> "You don't have the letters necessary for that move."
         Just Model.DoesNotConnect -> "Your move doesn't connect with existing tiles."
         Just (Model.NotAWord _) -> "At least one of the words you made doesn't exist."

@@ -1,6 +1,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 module Game where
 
+import Control.Monad (foldM)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -45,14 +46,25 @@ emptyBoard =
 
 applyMove :: Move -> Board -> Either MoveError Board
 applyMove Move{ startPos, direction, tiles } (Board board)
+  | null [() | PlaceTile _ <- tiles] = Left NoPlacedTiles
   | any (not . isValidPos . fst) posTiles = Left OffBoard
-  | otherwise = Right (Board (foldl applyTile board posTiles))
+  | otherwise = Board <$> foldM applyTile board posTiles
   where
     goPos MoveRight n (Pos i j) = Pos i (j + n)
     goPos MoveDown  n (Pos i j) = Pos (i + n) j
-    posTiles = [(goPos direction k startPos, tile) | (k, tile) <- zip [0..] tiles]
-    applyTile oldBoard (pos, tile) =
-      Map.adjust (\sq -> sq{ squareTile = Just tile }) pos oldBoard
+    posTiles =
+      [(goPos direction k startPos, moveTile) | (k, moveTile) <- zip [0..] tiles]
+    updateSquare _ Nothing = Left OffBoard
+    updateSquare UseBoard (Just sq) =
+      case squareTile sq of
+        Nothing -> Left TilesDoNotMatchBoard
+        Just _ -> Right (Just sq)
+    updateSquare (PlaceTile placed) (Just sq) =
+      case squareTile sq of
+        Just _ -> Left TilesDoNotMatchBoard
+        Nothing -> Right (Just sq{ squareTile = Just placed })
+    applyTile oldBoard (pos, moveTile) =
+      Map.alterF (updateSquare moveTile) pos oldBoard
 
 data GameState =
   GameState

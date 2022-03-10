@@ -61,11 +61,19 @@ data MoveDirection
 instance Aeson.FromJSON MoveDirection
 instance Aeson.ToJSON MoveDirection
 
+data MoveTile
+  = PlaceTile Tile
+  | UseBoard
+  deriving (Generic, Show)
+
+instance Aeson.FromJSON MoveTile
+instance Aeson.ToJSON MoveTile
+
 data Move =
   Move
     { startPos :: Pos
     , direction :: MoveDirection
-    , tiles :: [Tile]
+    , tiles :: [MoveTile]
     }
   deriving (Generic, Show)
 
@@ -77,6 +85,7 @@ data MoveError
   | NotYourTurn
   | OffBoard
   | TilesDoNotMatchBoard
+  | NoPlacedTiles
   | YouDoNotHave [Tile]
   | DoesNotConnect
   | NotAWord [Move]

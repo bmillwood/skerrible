@@ -161,7 +161,7 @@ updateMoveWithKey rack move key =
     Key.Letter c ->
       case Dict.get c values of
         Nothing -> Msg.SetRackError True
-        Just v -> Msg.ProposeMove (Just { move | tiles = move.tiles ++ [{ char = c, score = v }] })
+        Just v -> Msg.ProposeMove (Just { move | tiles = move.tiles ++ [Model.PlaceTile { char = c, score = v }] })
     Key.Escape ->
       if List.isEmpty move.tiles
       then Msg.ProposeMove Nothing

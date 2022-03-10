@@ -32,11 +32,15 @@ type MoveDirection
   = MoveRight
   | MoveDown
 
+type MoveTile
+  = PlaceTile Tile
+  | UseBoard
+
 type alias Move =
   { startRow : Int
   , startCol : Int
   , direction : MoveDirection
-  , tiles : List Tile
+  , tiles : List MoveTile
   }
 
 type MoveError
@@ -44,6 +48,7 @@ type MoveError
   | NotYourTurn
   | OffBoard
   | TilesDoNotMatchBoard
+  | NoPlacedTiles
   | YouDoNotHave (List Tile)
   | DoesNotConnect
   | NotAWord (List Move)

@@ -27,27 +27,18 @@ connect { endpoint } = request { kind = "connect", payload = Json.Encode.string 
 send : Json.Encode.Value -> Cmd msg
 send value = request { kind = "send", payload = value }
 
-contentsWithTag : String -> Json.Encode.Value -> Json.Encode.Value
-contentsWithTag tag contents =
-  Json.Encode.object
-    [ ( "tag", Json.Encode.string tag )
-    , ( "contents", contents )
-    ]
+withTag : String -> List (String, Json.Encode.Value) -> Json.Encode.Value
+withTag tag fields =
+  Json.Encode.object (("tag", Json.Encode.string tag) :: fields)
 
 login : { username : String } -> Cmd msg
 login { username } =
-  Json.Encode.object
-    [ ( "tag", Json.Encode.string "LoginRequest" )
-    , ( "loginRequestName", Json.Encode.string username )
-    ]
+  withTag "LoginRequest" [("loginRequestName", Json.Encode.string username)]
   |> send
 
 chat : String -> Cmd msg
 chat message =
-  Json.Encode.object
-    [ ( "tag", Json.Encode.string "Chat" )
-    , ( "msgToSend", Json.Encode.string message )
-    ]
+  withTag "Chat" [("msgToSend", Json.Encode.string message)]
   |> send
 
 encodeDirection : Model.MoveDirection -> Json.Encode.Value
@@ -65,14 +56,23 @@ encodeTile { char, score } =
     , ( "tileScore", Json.Encode.int score )
     ]
 
+encodeMoveTile : Model.MoveTile -> Json.Encode.Value
+encodeMoveTile moveTile =
+  case moveTile of
+    Model.PlaceTile tile -> withTag "PlaceTile" [("contents", encodeTile tile)]
+    Model.UseBoard -> withTag "UseBoard" []
+
 sendMove : Model.Move -> Cmd msg
 sendMove { startRow, startCol, direction, tiles } =
-  Json.Encode.object
-    [ ( "startPos", Json.Encode.list Json.Encode.int [startRow, startCol] )
-    , ( "direction", encodeDirection direction )
-    , ( "tiles", Json.Encode.list encodeTile tiles )
+  withTag "MakeMove"
+    [ ( "contents"
+      , Json.Encode.object
+          [ ( "startPos", Json.Encode.list Json.Encode.int [startRow, startCol] )
+          , ( "direction", encodeDirection direction )
+          , ( "tiles", Json.Encode.list encodeMoveTile tiles )
+          ]
+      )
     ]
-  |> contentsWithTag "MakeMove"
   |> send
 
 encodeNullable : (a -> Json.Encode.Value) -> Maybe a -> Json.Encode.Value
@@ -130,15 +130,15 @@ connectionStatus =
     , ("disconnected", Disconnected)
     ]
 
-tile : Json.Decode.Decoder Model.Tile
-tile =
+decodeTile : Json.Decode.Decoder Model.Tile
+decodeTile =
   Json.Decode.map2
     Model.Tile
     (Json.Decode.field "tileChar" Key.decodeChar)
     (Json.Decode.field "tileScore" Json.Decode.int)
 
 rack : Json.Decode.Decoder Model.Rack
-rack = Json.Decode.list tile
+rack = Json.Decode.list decodeTile
 
 square : Json.Decode.Decoder Model.Square
 square =
@@ -146,7 +146,7 @@ square =
     Model.Square
     (Json.Decode.field "letterMult" Json.Decode.int)
     (Json.Decode.field "wordMult" Json.Decode.int)
-    (Json.Decode.field "squareTile" (Json.Decode.nullable tile))
+    (Json.Decode.field "squareTile" (Json.Decode.nullable decodeTile))
 
 moveDirection : Json.Decode.Decoder Model.MoveDirection
 moveDirection =
@@ -156,6 +156,14 @@ moveDirection =
     , ( "MoveDown", Model.MoveDown )
     ]
 
+decodeMoveTile : Json.Decode.Decoder Model.MoveTile
+decodeMoveTile =
+  variant
+    { name = "decodeMoveTile" }
+    [ ( "PlaceTile", WithContents (Json.Decode.map Model.PlaceTile decodeTile) )
+    , ( "UseBoard", Plain Model.UseBoard )
+    ]
+
 move : Json.Decode.Decoder Model.Move
 move =
   Json.Decode.map4
@@ -163,7 +171,7 @@ move =
     (Json.Decode.field "startPos" (Json.Decode.index 0 Json.Decode.int))
     (Json.Decode.field "startPos" (Json.Decode.index 1 Json.Decode.int))
     (Json.Decode.field "direction" moveDirection)
-    (Json.Decode.field "tiles" (Json.Decode.list tile))
+    (Json.Decode.field "tiles" (Json.Decode.list decodeMoveTile))
 
 eitherResult : Json.Decode.Decoder err -> Json.Decode.Decoder ok -> Json.Decode.Decoder (Result err ok)
 eitherResult decodeErr decodeOk =
@@ -231,8 +239,10 @@ serverMsg =
         , ( "NotYourTurn", Plain Model.NotYourTurn )
         , ( "OffBoard", Plain Model.OffBoard )
         , ( "TilesDoNotMatchBoard", Plain Model.TilesDoNotMatchBoard )
+        , ( "NoPlacedTiles", Plain Model.NoPlacedTiles )
         , ( "YouDoNotHave"
-          , WithContents (Json.Decode.map Model.YouDoNotHave (Json.Decode.list tile))
+          , WithContents
+              (Json.Decode.map Model.YouDoNotHave (Json.Decode.list decodeTile))
           )
         , ( "DoesNotConnect", Plain Model.DoesNotConnect )
         , ( "NotAWord"
