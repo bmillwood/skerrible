@@ -183,12 +183,21 @@ viewRack { rack, rackError } =
       ] |> List.concat
     rackTile tile =
       Html.td attributes [ Html.text (String.fromChar tile.char) ]
+    spaceTd =
+      -- it seems like the cells of a table are stretched to the width of the
+      -- table, but we want ours to be fixed size, so we include this one to mop
+      -- up the "unused" width.
+      Html.td [] []
   in
   Html.table
     [ Attributes.style "border" "1px solid black"
     , Attributes.style "background-color" (if rackError then "red" else "green")
+    , -- since tds are 1.5em, it seems like this should be 1.5 * 7 = 10.5em, but
+      -- it seems like we need to compensate for padding and margin as well
+      -- plus the "real" racks have a bit of extra space in them anyway
+      Attributes.style "width" "14em"
     ]
-    [ Html.tr [] (List.map rackTile rack) ]
+    [ Html.tr [] (List.map rackTile rack ++ [ spaceTd ]) ]
 
 viewChatting : Model.ChattingState -> Html Msg.OkMsg
 viewChatting { folks, me, messageEntry, history } =

@@ -127,6 +127,7 @@ writeThread ServerState{ gameStore, broadcast } conn _username = do
         , Tile{ tileChar = 'D', tileScore = 2 }
         , Tile{ tileChar = 'E', tileScore = 1 }
         , Tile{ tileChar = 'F', tileScore = 4 }
+        , Tile{ tileChar = 'G', tileScore = 2 }
         ]
       ))
   forever $ do
