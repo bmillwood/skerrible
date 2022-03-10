@@ -2,12 +2,13 @@ module Main exposing (main)
 
 import Browser
 import Browser.Events
+import Dict
 import Json.Decode
 import Html exposing (Html)
 import Set
 import Task
 
-import KeyHandler
+import Key exposing (Key)
 import LocationParser
 import Model exposing (Model)
 import Msg exposing (Msg)
@@ -144,11 +145,42 @@ update msg model =
           , Cmd.none
           )
 
+updateMoveWithKey : Model.Rack -> Model.Move -> Key -> Msg.OkMsg
+updateMoveWithKey rack move key =
+  let
+    values = Dict.fromList (List.map (\tile -> (tile.char, tile.score)) rack)
+  in
+  case key of
+    Key.Backspace ->
+      Msg.ProposeMove (Just { move | tiles = List.take (List.length move.tiles - 1) move.tiles })
+    Key.Enter -> Msg.SendMove
+    Key.Letter c ->
+      case Dict.get c values of
+        Nothing -> Msg.DoNothing
+        Just v -> Msg.ProposeMove (Just { move | tiles = move.tiles ++ [{ char = c, score = v }] })
+    Key.Escape ->
+      if List.isEmpty move.tiles
+      then Msg.ProposeMove Nothing
+      else Msg.DoNothing
+    Key.Other -> Msg.DoNothing
+
+handleKey : Model.Model -> Json.Decode.Decoder Msg.Msg
+handleKey model =
+  case model.state of
+    Model.PreLogin _ -> Json.Decode.succeed (Ok Msg.DoNothing)
+    Model.InGame { game } ->
+      case game.proposedMove of
+        Nothing -> Json.Decode.succeed (Ok Msg.DoNothing)
+        Just move ->
+          Json.Decode.map
+            (Ok << updateMoveWithKey game.rack move)
+            Key.decodeKey
+
 subscriptions : Model -> Sub Msg
 subscriptions model =
   Sub.batch
     [ Ports.subscriptions model
-    , Browser.Events.onKeyDown (KeyHandler.handleKey model)
+    , Browser.Events.onKeyDown (handleKey model)
     ]
 
 main =

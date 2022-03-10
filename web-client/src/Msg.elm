@@ -2,6 +2,7 @@ module Msg exposing (..)
 
 import Set exposing (Set)
 
+import Key exposing (Key)
 import Model
 
 type LoginFormMsg

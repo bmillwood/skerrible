@@ -6,7 +6,7 @@ import Json.Decode
 import Json.Encode
 import Set exposing (Set)
 
-import KeyHandler
+import Key
 import Model
 import Msg exposing (Msg)
 
@@ -134,7 +134,7 @@ tile : Json.Decode.Decoder Model.Tile
 tile =
   Json.Decode.map2
     Model.Tile
-    (Json.Decode.field "tileChar" KeyHandler.decodeChar)
+    (Json.Decode.field "tileChar" Key.decodeChar)
     (Json.Decode.field "tileScore" Json.Decode.int)
 
 rack : Json.Decode.Decoder Model.Rack
