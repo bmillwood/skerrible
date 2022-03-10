@@ -60,6 +60,7 @@ update msg model =
                   , game =
                       { board = Model.emptyBoard
                       , rack = []
+                      , rackError = False
                       , proposedMove = Nothing
                       , moveError = Nothing
                       }
@@ -77,6 +78,7 @@ update msg model =
         Ok (Msg.NewFolks folks) -> loggedIn folks
         Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
         Ok (Msg.UpdateRack _) -> failed "Unexpected rack before login!"
+        Ok (Msg.SetRackError _) -> failed "Unexpected rack error before login!"
         Ok (Msg.ProposeMove _) -> failed "Can't propose move before login!"
         Ok Msg.SendMove -> failed "Can't send move before login!"
         Ok (Msg.MoveResult _) -> failed "Unexpected move result before login!"
@@ -120,6 +122,8 @@ update msg model =
           ( setGame { game | board = newBoard }, Cmd.none )
         Ok (Msg.UpdateRack newRack) ->
           ( setGame { game | rack = newRack }, Cmd.none )
+        Ok (Msg.SetRackError newRackError) ->
+          ( setGame { game | rackError = newRackError }, Cmd.none )
         Ok (Msg.ProposeMove move) ->
           ( setGame { game | proposedMove = move }, Cmd.none )
         Ok Msg.SendMove ->
@@ -156,7 +160,7 @@ updateMoveWithKey rack move key =
     Key.Enter -> Msg.SendMove
     Key.Letter c ->
       case Dict.get c values of
-        Nothing -> Msg.DoNothing
+        Nothing -> Msg.SetRackError True
         Just v -> Msg.ProposeMove (Just { move | tiles = move.tiles ++ [{ char = c, score = v }] })
     Key.Escape ->
       if List.isEmpty move.tiles
@@ -164,23 +168,28 @@ updateMoveWithKey rack move key =
       else Msg.DoNothing
     Key.Other -> Msg.DoNothing
 
-handleKey : Model.Model -> Json.Decode.Decoder Msg.Msg
-handleKey model =
-  case model.state of
-    Model.PreLogin _ -> Json.Decode.succeed (Ok Msg.DoNothing)
-    Model.InGame { game } ->
-      case game.proposedMove of
-        Nothing -> Json.Decode.succeed (Ok Msg.DoNothing)
-        Just move ->
-          Json.Decode.map
-            (Ok << updateMoveWithKey game.rack move)
-            Key.decodeKey
+handleKey : Model.Game -> Json.Decode.Decoder Msg.OkMsg
+handleKey game =
+  case game.proposedMove of
+    Nothing -> Json.Decode.succeed Msg.DoNothing
+    Just move ->
+      Json.Decode.map
+        (updateMoveWithKey game.rack move)
+        Key.decodeKey
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
+  let
+    ifPlaying decoderOfGame =
+      case model.state of
+        Model.PreLogin _ -> Json.Decode.succeed (Ok Msg.DoNothing)
+        Model.InGame { game } -> Json.Decode.map Ok (decoderOfGame game)
+  in
   Sub.batch
     [ Ports.subscriptions model
-    , Browser.Events.onKeyDown (handleKey model)
+    , Browser.Events.onKeyDown (ifPlaying handleKey)
+    , Browser.Events.onKeyUp
+        (ifPlaying (\_ -> Json.Decode.succeed (Msg.SetRackError False)))
     ]
 
 main =

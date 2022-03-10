@@ -51,6 +51,7 @@ type MoveError
 type alias Game =
   { board : Board
   , rack : Rack
+  , rackError : Bool
   , proposedMove : Maybe Move
   , moveError : Maybe MoveError
   }

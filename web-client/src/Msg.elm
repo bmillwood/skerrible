@@ -21,6 +21,7 @@ type OkMsg
   | NewFolks Model.Folks
   | UpdateBoard Model.Board
   | UpdateRack Model.Rack
+  | SetRackError Bool
   | ProposeMove (Maybe Model.Move)
   | SendMove
   | MoveResult (Result Model.MoveError ())

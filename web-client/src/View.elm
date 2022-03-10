@@ -174,8 +174,8 @@ viewError error =
     ]
     [ Html.text text ]
 
-viewRack : Model.Rack -> Html Msg.OkMsg
-viewRack rack =
+viewRack : { rack : Model.Rack, rackError : Bool } -> Html Msg.OkMsg
+viewRack { rack, rackError } =
   let
     attributes =
       [ [ Attributes.style "background-color" tileColor ]
@@ -186,7 +186,7 @@ viewRack rack =
   in
   Html.table
     [ Attributes.style "border" "1px solid black"
-    , Attributes.style "background-color" "green"
+    , Attributes.style "background-color" (if rackError then "red" else "green")
     ]
     [ Html.tr [] (List.map rackTile rack) ]
 
@@ -259,7 +259,7 @@ view { error, state } =
                   []
                   [ viewBoard game.board game.proposedMove
                   , viewError game.moveError
-                  , viewRack game.rack
+                  , viewRack { rack = game.rack, rackError = game.rackError }
                   , viewChatting chat
                   ]
               )
