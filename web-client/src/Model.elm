@@ -8,6 +8,7 @@ import Move exposing (Move)
 type TransientError
   = RackError
   | SquareError Int Int
+  | BoardError
 
 type alias Game =
   { board : Board

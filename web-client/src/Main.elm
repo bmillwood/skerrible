@@ -164,18 +164,21 @@ updateMoveWithKey board rack move key =
         addTile moveTile =
           Msg.ProposeMove (Just { move | tiles = move.tiles ++ [moveTile] })
       in
-      case Board.getTile i j board of
-        Nothing ->
-          case Dict.get c (Board.rackByChar rack) of
-            Nothing -> Msg.SetTransientError (Just Model.RackError)
-            Just countByScore ->
-              case List.head (List.reverse (Dict.keys countByScore)) of
+      case Board.get i j board of
+        Nothing -> Msg.SetTransientError (Just Model.BoardError)
+        Just sq ->
+          case sq.tile of
+            Nothing ->
+              case Dict.get c (Board.rackByChar rack) of
                 Nothing -> Msg.SetTransientError (Just Model.RackError)
-                Just v -> addTile (Move.PlaceTile { char = c, score = v })
-        Just tile ->
-          if tile.char == c
-          then addTile Move.UseBoard
-          else Msg.SetTransientError (Just (Model.SquareError i j))
+                Just countByScore ->
+                  case List.head (List.reverse (Dict.keys countByScore)) of
+                    Nothing -> Msg.SetTransientError (Just Model.RackError)
+                    Just v -> addTile (Move.PlaceTile { char = c, score = v })
+            Just tile ->
+              if tile.char == c
+              then addTile Move.UseBoard
+              else Msg.SetTransientError (Just (Model.SquareError i j))
     Key.Escape ->
       if List.isEmpty move.tiles
       then Msg.ProposeMove Nothing

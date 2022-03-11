@@ -61,9 +61,12 @@ tileColor : String
 tileColor = "beige"
 
 viewBoard
-  : { board : Board, proposedMove : Maybe Move, squareError : Maybe (Int, Int) }
+  :  { board : Board
+     , proposedMove : Maybe Move
+     , transientError : Maybe Model.TransientError
+     }
   -> Html Msg.OkMsg
-viewBoard { board, proposedMove, squareError } =
+viewBoard { board, proposedMove, transientError } =
   let
     { top, left, squares } = board
     square rowIx colIx sq =
@@ -74,9 +77,9 @@ viewBoard { board, proposedMove, squareError } =
         isJust = Maybe.withDefault False << Maybe.map (always True)
         tileHere = isJust sq.tile || isJust placed
         errorHere =
-          case squareError of
-            Just (i, j) -> i == rowN && j == colN
-            Nothing -> False
+          case transientError of
+            Just (Model.SquareError i j) -> i == rowN && j == colN
+            _ -> False
         bgColor =
           if errorHere
           then "red"
@@ -146,9 +149,20 @@ viewBoard { board, proposedMove, squareError } =
         (\i () -> Html.th [ Attributes.scope "col" ] [ Html.text (colLetter i) ])
         (List.repeat (Board.width board) ())
     headerRow = Html.tr [] (Html.td [] [] :: colHeaders)
+    tableAttributes =
+      case (transientError, proposedMove) of
+        (Just Model.BoardError, Just { direction }) ->
+          let
+            which =
+              case direction of
+                Move.Right -> "border-right"
+                Move.Down -> "border-bottom"
+          in
+          [ Attributes.style which "2px solid red" ]
+        _ -> []
   in
   Html.table
-    []
+    tableAttributes
     (headerRow :: List.indexedMap tableRow (Array.toList squares))
 
 viewError : Maybe Move.Error -> Html Msg.OkMsg
@@ -267,12 +281,7 @@ view { error, state } =
                   [ viewBoard
                       { board = game.board
                       , proposedMove = game.proposedMove
-                      , squareError =
-                          game.transientError
-                          |> Maybe.andThen (\err ->
-                            case err of
-                              Model.RackError -> Nothing
-                              Model.SquareError i j -> Just (i, j))
+                      , transientError = game.transientError
                       }
                   , viewError game.moveError
                   , viewRack
