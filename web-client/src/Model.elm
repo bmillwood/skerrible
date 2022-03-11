@@ -5,12 +5,16 @@ import Set exposing (Set)
 import Board exposing (Board)
 import Move exposing (Move)
 
+type TransientError
+  = RackError
+  | SquareError Int Int
+
 type alias Game =
   { board : Board
   , rack : Board.Rack
-  , rackError : Bool
   , proposedMove : Maybe Move
   , moveError : Maybe Move.Error
+  , transientError : Maybe TransientError
   }
 
 type alias Chat =

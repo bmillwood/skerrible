@@ -26,6 +26,18 @@ posAt i { startRow, startCol, direction } =
 nextPos : Move -> (Int, Int)
 nextPos move = posAt (List.length move.tiles) move
 
+tileAtPos : Int -> Int -> Move -> Maybe Tile
+tileAtPos rowN colN { startRow, startCol, direction, tiles } =
+  case direction of
+    Right ->
+      if rowN == startRow && colN >= startCol
+      then List.head (List.drop (colN - startCol) tiles)
+      else Nothing
+    Down ->
+      if colN == startCol && rowN >= startRow
+      then List.head (List.drop (rowN - startRow) tiles)
+      else Nothing
+
 type Error
   = NotPlaying
   | NotYourTurn

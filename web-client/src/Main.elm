@@ -62,7 +62,7 @@ update msg model =
                   , game =
                       { board = Board.empty
                       , rack = []
-                      , rackError = False
+                      , transientError = Nothing
                       , proposedMove = Nothing
                       , moveError = Nothing
                       }
@@ -80,7 +80,8 @@ update msg model =
         Ok (Msg.NewFolks folks) -> loggedIn folks
         Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
         Ok (Msg.UpdateRack _) -> failed "Unexpected rack before login!"
-        Ok (Msg.SetRackError _) -> failed "Unexpected rack error before login!"
+        Ok (Msg.SetTransientError _) ->
+          failed "Unexpected transient error before login!"
         Ok (Msg.ProposeMove _) -> failed "Can't propose move before login!"
         Ok Msg.SendMove -> failed "Can't send move before login!"
         Ok (Msg.MoveResult _) -> failed "Unexpected move result before login!"
@@ -124,8 +125,8 @@ update msg model =
           ( setGame { game | board = newBoard }, Cmd.none )
         Ok (Msg.UpdateRack newRack) ->
           ( setGame { game | rack = newRack }, Cmd.none )
-        Ok (Msg.SetRackError newRackError) ->
-          ( setGame { game | rackError = newRackError }, Cmd.none )
+        Ok (Msg.SetTransientError newTransientError) ->
+          ( setGame { game | transientError = newTransientError }, Cmd.none )
         Ok (Msg.ProposeMove move) ->
           ( setGame { game | proposedMove = move }, Cmd.none )
         Ok Msg.SendMove ->
@@ -166,15 +167,15 @@ updateMoveWithKey board rack move key =
       case Board.getTile i j board of
         Nothing ->
           case Dict.get c (Board.rackByChar rack) of
-            Nothing -> Msg.SetRackError True
+            Nothing -> Msg.SetTransientError (Just Model.RackError)
             Just countByScore ->
               case List.head (List.reverse (Dict.keys countByScore)) of
-                Nothing -> Msg.SetRackError True
+                Nothing -> Msg.SetTransientError (Just Model.RackError)
                 Just v -> addTile (Move.PlaceTile { char = c, score = v })
         Just tile ->
           if tile.char == c
           then addTile Move.UseBoard
-          else Msg.SetRackError True
+          else Msg.SetTransientError (Just (Model.SquareError i j))
     Key.Escape ->
       if List.isEmpty move.tiles
       then Msg.ProposeMove Nothing
@@ -202,7 +203,7 @@ subscriptions model =
     [ Ports.subscriptions model
     , Browser.Events.onKeyDown (ifPlaying handleKey)
     , Browser.Events.onKeyUp
-        (ifPlaying (\_ -> Json.Decode.succeed (Msg.SetRackError False)))
+        (ifPlaying (\_ -> Json.Decode.succeed (Msg.SetTransientError Nothing)))
     ]
 
 main =

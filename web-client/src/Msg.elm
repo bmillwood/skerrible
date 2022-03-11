@@ -23,11 +23,11 @@ type OkMsg
   | NewFolks Model.Folks
   | UpdateBoard Board
   | UpdateRack Board.Rack
-  | SetRackError Bool
   | ProposeMove (Maybe Move)
   | SendMove
   | MoveResult (Result Move.Error ())
   | ClearMoveError
+  | SetTransientError (Maybe Model.TransientError)
 
 type Error
   = ServerDisconnected

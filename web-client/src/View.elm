@@ -60,31 +60,27 @@ tileStyle =
 tileColor : String
 tileColor = "beige"
 
-viewBoard : Board -> Maybe Move -> Html Msg.OkMsg
-viewBoard ({ top, left, squares } as board) proposedMove =
+viewBoard
+  : { board : Board, proposedMove : Maybe Move, squareError : Maybe (Int, Int) }
+  -> Html Msg.OkMsg
+viewBoard { board, proposedMove, squareError } =
   let
-    placedTile rowN colN =
-      case proposedMove of
-        Nothing -> Nothing
-        Just { startRow, startCol, direction, tiles } ->
-          case direction of
-            Move.Right ->
-              if rowN == startRow && colN >= startCol
-              then List.head (List.drop (colN - startCol) tiles)
-              else Nothing
-            Move.Down ->
-              if colN == startCol && rowN >= startRow
-              then List.head (List.drop (rowN - startRow) tiles)
-              else Nothing
+    { top, left, squares } = board
     square rowIx colIx sq =
       let
         rowN = rowIx + top
         colN = colIx + left
-        placed = placedTile rowN colN
+        placed = proposedMove |> Maybe.andThen (Move.tileAtPos rowN colN)
         isJust = Maybe.withDefault False << Maybe.map (always True)
         tileHere = isJust sq.tile || isJust placed
+        errorHere =
+          case squareError of
+            Just (i, j) -> i == rowN && j == colN
+            Nothing -> False
         bgColor =
-          if tileHere
+          if errorHere
+          then "red"
+          else if tileHere
           then tileColor
           else
             case sq.wordMult of
@@ -268,9 +264,21 @@ view { error, state } =
             Html.map Ok (
                 Html.div
                   []
-                  [ viewBoard game.board game.proposedMove
+                  [ viewBoard
+                      { board = game.board
+                      , proposedMove = game.proposedMove
+                      , squareError =
+                          game.transientError
+                          |> Maybe.andThen (\err ->
+                            case err of
+                              Model.RackError -> Nothing
+                              Model.SquareError i j -> Just (i, j))
+                      }
                   , viewError game.moveError
-                  , viewRack { rack = game.rack, rackError = game.rackError }
+                  , viewRack
+                      { rack = game.rack
+                      , rackError = game.transientError == Just Model.RackError
+                      }
                   , viewChatting chat
                   ]
               )
