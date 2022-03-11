@@ -8,9 +8,11 @@ import Html exposing (Html)
 import Set
 import Task
 
+import Board exposing (Board)
 import Key exposing (Key)
 import LocationParser
 import Model exposing (Model)
+import Move exposing (Move)
 import Msg exposing (Msg)
 import Ports
 import View
@@ -58,7 +60,7 @@ update msg model =
                       , history = []
                       }
                   , game =
-                      { board = Model.emptyBoard
+                      { board = Board.empty
                       , rack = []
                       , rackError = False
                       , proposedMove = Nothing
@@ -149,19 +151,30 @@ update msg model =
           , Cmd.none
           )
 
-updateMoveWithKey : Model.Rack -> Model.Move -> Key -> Msg.OkMsg
-updateMoveWithKey rack move key =
-  let
-    values = Dict.fromList (List.map (\tile -> (tile.char, tile.score)) rack)
-  in
+updateMoveWithKey : Board -> Board.Rack -> Move -> Key -> Msg.OkMsg
+updateMoveWithKey board rack move key =
   case key of
     Key.Backspace ->
       Msg.ProposeMove (Just { move | tiles = List.take (List.length move.tiles - 1) move.tiles })
     Key.Enter -> Msg.SendMove
     Key.Letter c ->
-      case Dict.get c values of
-        Nothing -> Msg.SetRackError True
-        Just v -> Msg.ProposeMove (Just { move | tiles = move.tiles ++ [Model.PlaceTile { char = c, score = v }] })
+      let
+        (i, j) = Move.nextPos move
+        addTile moveTile =
+          Msg.ProposeMove (Just { move | tiles = move.tiles ++ [moveTile] })
+      in
+      case Board.getTile i j board of
+        Nothing ->
+          case Dict.get c (Board.rackByChar rack) of
+            Nothing -> Msg.SetRackError True
+            Just countByScore ->
+              case List.head (List.reverse (Dict.keys countByScore)) of
+                Nothing -> Msg.SetRackError True
+                Just v -> addTile (Move.PlaceTile { char = c, score = v })
+        Just tile ->
+          if tile.char == c
+          then addTile Move.UseBoard
+          else Msg.SetRackError True
     Key.Escape ->
       if List.isEmpty move.tiles
       then Msg.ProposeMove Nothing
@@ -174,7 +187,7 @@ handleKey game =
     Nothing -> Json.Decode.succeed Msg.DoNothing
     Just move ->
       Json.Decode.map
-        (updateMoveWithKey game.rack move)
+        (updateMoveWithKey game.board game.rack move)
         Key.decodeKey
 
 subscriptions : Model -> Sub Msg

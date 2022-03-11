@@ -2,8 +2,10 @@ module Msg exposing (..)
 
 import Set exposing (Set)
 
+import Board exposing (Board)
 import Key exposing (Key)
 import Model
+import Move exposing (Move)
 
 type LoginFormMsg
   = Update Model.LoginForm
@@ -19,12 +21,12 @@ type OkMsg
   | SendMessage String
   | ReceiveMessage Model.Chat
   | NewFolks Model.Folks
-  | UpdateBoard Model.Board
-  | UpdateRack Model.Rack
+  | UpdateBoard Board
+  | UpdateRack Board.Rack
   | SetRackError Bool
-  | ProposeMove (Maybe Model.Move)
+  | ProposeMove (Maybe Move)
   | SendMove
-  | MoveResult (Result Model.MoveError ())
+  | MoveResult (Result Move.Error ())
   | ClearMoveError
 
 type Error

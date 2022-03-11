@@ -7,7 +7,9 @@ import Html.Attributes as Attributes
 import Html.Events as Events
 import Json.Decode
 
+import Board exposing (Board)
 import Model
+import Move exposing (Move)
 import Msg exposing (Msg)
 
 viewPreLogin : Model.PreLoginState -> Html Msg.LoginFormMsg
@@ -58,19 +60,19 @@ tileStyle =
 tileColor : String
 tileColor = "beige"
 
-viewBoard : Model.Board -> Maybe Model.Move -> Html Msg.OkMsg
-viewBoard { top, left, squares } proposedMove =
+viewBoard : Board -> Maybe Move -> Html Msg.OkMsg
+viewBoard ({ top, left, squares } as board) proposedMove =
   let
     placedTile rowN colN =
       case proposedMove of
         Nothing -> Nothing
         Just { startRow, startCol, direction, tiles } ->
           case direction of
-            Model.MoveRight ->
+            Move.Right ->
               if rowN == startRow && colN >= startCol
               then List.head (List.drop (colN - startCol) tiles)
               else Nothing
-            Model.MoveDown ->
+            Move.Down ->
               if colN == startCol && rowN >= startRow
               then List.head (List.drop (rowN - startRow) tiles)
               else Nothing
@@ -110,15 +112,15 @@ viewBoard { top, left, squares } proposedMove =
           [ [ Attributes.style "background-color" bgColor
             , Events.onClick (
                 case proposedMove of
-                  Nothing -> Msg.ProposeMove (Just (newMove Model.MoveRight))
+                  Nothing -> Msg.ProposeMove (Just (newMove Move.Right))
                   Just { startRow, startCol, direction, tiles } ->
                     if not (List.isEmpty tiles)
                     then Msg.DoNothing
                     else
                       case directionIfHere of
-                        Nothing -> Msg.ProposeMove (Just (newMove Model.MoveRight))
-                        Just Model.MoveRight -> Msg.ProposeMove (Just (newMove Model.MoveDown))
-                        Just Model.MoveDown -> Msg.ProposeMove Nothing
+                        Nothing -> Msg.ProposeMove (Just (newMove Move.Right))
+                        Just Move.Right -> Msg.ProposeMove (Just (newMove Move.Down))
+                        Just Move.Down -> Msg.ProposeMove Nothing
               )
             ]
           , redIfMove
@@ -126,15 +128,15 @@ viewBoard { top, left, squares } proposedMove =
           ] |> List.concat
         char =
           case placed of
-            Just (Model.PlaceTile tile) -> tile.char
+            Just (Move.PlaceTile tile) -> tile.char
             _ ->
               case sq.tile of
                 Just t -> t.char
                 Nothing ->
                   case directionIfHere of
                     Nothing -> ' '
-                    Just Model.MoveRight -> '→'
-                    Just Model.MoveDown -> '↓'
+                    Just Move.Right -> '→'
+                    Just Move.Down -> '↓'
       in
       Html.td attributes [ Html.text (String.fromChar char) ]
     rowNumCell n = Html.th [ Attributes.scope "row" ] [ Html.text (String.fromInt (n + 1)) ]
@@ -142,32 +144,31 @@ viewBoard { top, left, squares } proposedMove =
       Html.tr
         []
         (rowNumCell rowIx :: List.indexedMap (square rowIx) (Array.toList row))
-    boardWidth = Array.foldl max 0 (Array.map Array.length squares)
     colLetter i = String.fromChar (Char.fromCode (Char.toCode 'A' + i))
     colHeaders =
       List.indexedMap
         (\i () -> Html.th [ Attributes.scope "col" ] [ Html.text (colLetter i) ])
-        (List.repeat boardWidth ())
+        (List.repeat (Board.width board) ())
     headerRow = Html.tr [] (Html.td [] [] :: colHeaders)
   in
   Html.table
     []
     (headerRow :: List.indexedMap tableRow (Array.toList squares))
 
-viewError : Maybe Model.MoveError -> Html Msg.OkMsg
+viewError : Maybe Move.Error -> Html Msg.OkMsg
 viewError error =
   let
     text =
       case error of
         Nothing -> ""
-        Just Model.NotPlaying -> "The game is not in progress"
-        Just Model.NotYourTurn -> "It's not your turn!"
-        Just Model.OffBoard -> "Your move starts or ends off the edge of the board."
-        Just Model.TilesDoNotMatchBoard -> "The tiles you provided don't match the ones on the board."
-        Just Model.NoPlacedTiles -> "Your move doesn't use any tiles from your rack."
-        Just (Model.YouDoNotHave _) -> "You don't have the letters necessary for that move."
-        Just Model.DoesNotConnect -> "Your move doesn't connect with existing tiles."
-        Just (Model.NotAWord _) -> "At least one of the words you made doesn't exist."
+        Just Move.NotPlaying -> "The game is not in progress"
+        Just Move.NotYourTurn -> "It's not your turn!"
+        Just Move.OffBoard -> "Your move starts or ends off the edge of the board."
+        Just Move.TilesDoNotMatchBoard -> "The tiles you provided don't match the ones on the board."
+        Just Move.NoPlacedTiles -> "Your move doesn't use any tiles from your rack."
+        Just (Move.YouDoNotHave _) -> "You don't have the letters necessary for that move."
+        Just Move.DoesNotConnect -> "Your move doesn't connect with existing tiles."
+        Just (Move.NotAWord _) -> "At least one of the words you made doesn't exist."
   in
   Html.div
     [ Events.onClick Msg.ClearMoveError
@@ -175,7 +176,7 @@ viewError error =
     ]
     [ Html.text text ]
 
-viewRack : { rack : Model.Rack, rackError : Bool } -> Html Msg.OkMsg
+viewRack : { rack : Board.Rack, rackError : Bool } -> Html Msg.OkMsg
 viewRack { rack, rackError } =
   let
     attributes =

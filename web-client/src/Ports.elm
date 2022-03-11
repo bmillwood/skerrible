@@ -6,8 +6,10 @@ import Json.Decode
 import Json.Encode
 import Set exposing (Set)
 
+import Board exposing (Board)
 import Key
 import Model
+import Move exposing (Move)
 import Msg exposing (Msg)
 
 port sendToJS : Json.Encode.Value -> Cmd msg
@@ -41,28 +43,28 @@ chat message =
   withTag "Chat" [("msgToSend", Json.Encode.string message)]
   |> send
 
-encodeDirection : Model.MoveDirection -> Json.Encode.Value
+encodeDirection : Move.Direction -> Json.Encode.Value
 encodeDirection d =
   Json.Encode.string (
     case d of
-      Model.MoveRight -> "MoveRight"
-      Model.MoveDown -> "MoveDown"
+      Move.Right -> "MoveRight"
+      Move.Down -> "MoveDown"
   )
 
-encodeTile : Model.Tile -> Json.Encode.Value
+encodeTile : Board.Tile -> Json.Encode.Value
 encodeTile { char, score } =
   Json.Encode.object
     [ ( "tileChar", Json.Encode.string (String.fromChar char) )
     , ( "tileScore", Json.Encode.int score )
     ]
 
-encodeMoveTile : Model.MoveTile -> Json.Encode.Value
+encodeMoveTile : Move.Tile -> Json.Encode.Value
 encodeMoveTile moveTile =
   case moveTile of
-    Model.PlaceTile tile -> withTag "PlaceTile" [("contents", encodeTile tile)]
-    Model.UseBoard -> withTag "UseBoard" []
+    Move.PlaceTile tile -> withTag "PlaceTile" [("contents", encodeTile tile)]
+    Move.UseBoard -> withTag "UseBoard" []
 
-sendMove : Model.Move -> Cmd msg
+sendMove : Move -> Cmd msg
 sendMove { startRow, startCol, direction, tiles } =
   withTag "MakeMove"
     [ ( "contents"
@@ -114,9 +116,9 @@ variant { name } values =
 type ServerMsg
   = Folks Model.Folks
   | Message Model.Chat
-  | UpdateBoard Model.Board
-  | UpdateRack Model.Rack
-  | MoveResult (Result Model.MoveError ())
+  | UpdateBoard Board.Board
+  | UpdateRack Board.Rack
+  | MoveResult (Result Move.Error ())
 
 type FromJS
   = ServerStatus ConnectionStatus
@@ -130,44 +132,44 @@ connectionStatus =
     , ("disconnected", Disconnected)
     ]
 
-decodeTile : Json.Decode.Decoder Model.Tile
+decodeTile : Json.Decode.Decoder Board.Tile
 decodeTile =
   Json.Decode.map2
-    Model.Tile
+    Board.Tile
     (Json.Decode.field "tileChar" Key.decodeChar)
     (Json.Decode.field "tileScore" Json.Decode.int)
 
-rack : Json.Decode.Decoder Model.Rack
+rack : Json.Decode.Decoder Board.Rack
 rack = Json.Decode.list decodeTile
 
-square : Json.Decode.Decoder Model.Square
+square : Json.Decode.Decoder Board.Square
 square =
   Json.Decode.map3
-    Model.Square
+    Board.Square
     (Json.Decode.field "letterMult" Json.Decode.int)
     (Json.Decode.field "wordMult" Json.Decode.int)
     (Json.Decode.field "squareTile" (Json.Decode.nullable decodeTile))
 
-moveDirection : Json.Decode.Decoder Model.MoveDirection
+moveDirection : Json.Decode.Decoder Move.Direction
 moveDirection =
   plainVariant
     { name = "moveDirection" }
-    [ ( "MoveRight", Model.MoveRight )
-    , ( "MoveDown", Model.MoveDown )
+    [ ( "MoveRight", Move.Right )
+    , ( "MoveDown", Move.Down )
     ]
 
-decodeMoveTile : Json.Decode.Decoder Model.MoveTile
+decodeMoveTile : Json.Decode.Decoder Move.Tile
 decodeMoveTile =
   variant
     { name = "decodeMoveTile" }
-    [ ( "PlaceTile", WithContents (Json.Decode.map Model.PlaceTile decodeTile) )
-    , ( "UseBoard", Plain Model.UseBoard )
+    [ ( "PlaceTile", WithContents (Json.Decode.map Move.PlaceTile decodeTile) )
+    , ( "UseBoard", Plain Move.UseBoard )
     ]
 
-move : Json.Decode.Decoder Model.Move
+move : Json.Decode.Decoder Move
 move =
   Json.Decode.map4
-    Model.Move
+    Move
     (Json.Decode.field "startPos" (Json.Decode.index 0 Json.Decode.int))
     (Json.Decode.field "startPos" (Json.Decode.index 1 Json.Decode.int))
     (Json.Decode.field "direction" moveDirection)
@@ -211,7 +213,7 @@ serverMsg =
         (Json.Decode.index 1 square)
     ofPosSquares posSquares =
       case posSquares of
-        [] -> Model.emptyBoard
+        [] -> Board.empty
         ((ai, aj), asq) :: _ ->
           let
             rowNumbers = List.map (\((i, _), _) -> i) posSquares
@@ -227,7 +229,7 @@ serverMsg =
               Array.initialize height (\row ->
                 Array.initialize width (\col ->
                   Dict.get (row + top, col + left) posSqDict
-                  |> Maybe.withDefault Model.emptySquare))
+                  |> Maybe.withDefault Board.emptySquare))
           in
           { top = top, left = left, squares = squares }
     board = Json.Decode.map ofPosSquares (Json.Decode.list posSquare)
@@ -235,18 +237,18 @@ serverMsg =
     moveError =
       variant
         { name = "moveError" }
-        [ ( "NotPlaying", Plain Model.NotPlaying )
-        , ( "NotYourTurn", Plain Model.NotYourTurn )
-        , ( "OffBoard", Plain Model.OffBoard )
-        , ( "TilesDoNotMatchBoard", Plain Model.TilesDoNotMatchBoard )
-        , ( "NoPlacedTiles", Plain Model.NoPlacedTiles )
+        [ ( "NotPlaying", Plain Move.NotPlaying )
+        , ( "NotYourTurn", Plain Move.NotYourTurn )
+        , ( "OffBoard", Plain Move.OffBoard )
+        , ( "TilesDoNotMatchBoard", Plain Move.TilesDoNotMatchBoard )
+        , ( "NoPlacedTiles", Plain Move.NoPlacedTiles )
         , ( "YouDoNotHave"
           , WithContents
-              (Json.Decode.map Model.YouDoNotHave (Json.Decode.list decodeTile))
+              (Json.Decode.map Move.YouDoNotHave (Json.Decode.list decodeTile))
           )
-        , ( "DoesNotConnect", Plain Model.DoesNotConnect )
+        , ( "DoesNotConnect", Plain Move.DoesNotConnect )
         , ( "NotAWord"
-          , WithContents (Json.Decode.map Model.NotAWord (Json.Decode.list move))
+          , WithContents (Json.Decode.map Move.NotAWord (Json.Decode.list move))
           )
         ]
     moveOk = Json.Decode.succeed ()
