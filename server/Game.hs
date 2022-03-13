@@ -74,3 +74,36 @@ data GameState =
 
 newGame :: GameState
 newGame = GameState{ folks = Set.empty, board = emptyBoard }
+
+tileData :: Map.Map Tile TileData
+tileData =
+  fmap (\(tileScore, tileCount) -> TileData{ tileScore, tileCount })
+  $ Map.fromList
+    [ (Blank     , ( 0,  2))
+    , (Letter 'A', ( 1,  9))
+    , (Letter 'B', ( 3,  2))
+    , (Letter 'C', ( 3,  2))
+    , (Letter 'D', ( 2,  4))
+    , (Letter 'E', ( 1, 12))
+    , (Letter 'F', ( 4,  2))
+    , (Letter 'G', ( 2,  3))
+    , (Letter 'H', ( 4,  2))
+    , (Letter 'I', ( 1,  9))
+    , (Letter 'J', ( 8,  1))
+    , (Letter 'K', ( 5,  1))
+    , (Letter 'L', ( 1,  4))
+    , (Letter 'M', ( 3,  2))
+    , (Letter 'N', ( 1,  6))
+    , (Letter 'O', ( 1,  8))
+    , (Letter 'P', ( 3,  2))
+    , (Letter 'Q', (10,  1))
+    , (Letter 'R', ( 1,  6))
+    , (Letter 'S', ( 1,  4))
+    , (Letter 'T', ( 1,  6))
+    , (Letter 'U', ( 1,  4))
+    , (Letter 'V', ( 4,  2))
+    , (Letter 'W', ( 4,  2))
+    , (Letter 'X', ( 8,  1))
+    , (Letter 'Y', ( 4,  2))
+    , (Letter 'Z', (10,  1))
+    ]

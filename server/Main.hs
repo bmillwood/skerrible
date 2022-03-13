@@ -120,14 +120,15 @@ writeThread ServerState{ gameStore, broadcast } conn _username = do
   withMVar gameStore $ \game -> do
     sendToClient conn Folks{ loggedInOthers = folks game }
     sendToClient conn (UpdateBoard (board game))
+    sendToClient conn (UpdateTileData tileData)
     sendToClient conn (UpdateRack (Rack
-        [ Tile{ tileChar = 'A', tileScore = 1 }
-        , Tile{ tileChar = 'B', tileScore = 3 }
-        , Tile{ tileChar = 'C', tileScore = 3 }
-        , Tile{ tileChar = 'D', tileScore = 2 }
-        , Tile{ tileChar = 'E', tileScore = 1 }
-        , Tile{ tileChar = 'F', tileScore = 4 }
-        , Tile{ tileChar = 'G', tileScore = 2 }
+        [ Letter 'A'
+        , Letter 'B'
+        , Letter 'C'
+        , Letter 'D'
+        , Letter 'E'
+        , Letter 'F'
+        , Letter 'G'
         ]
       ))
   forever $ do

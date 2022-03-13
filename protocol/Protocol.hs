@@ -12,14 +12,24 @@ import GHC.Generics (Generic)
 portNumber :: (Num n) => n
 portNumber = 4170
 
-data Tile =
-  Tile
-    { tileChar :: Char
-    , tileScore :: Integer
-    } deriving (Generic, Show)
+data Tile
+  = Letter Char
+  | Blank
+  deriving (Eq, Generic, Ord, Show)
 
 instance Aeson.FromJSON Tile
 instance Aeson.ToJSON Tile
+instance Aeson.FromJSONKey Tile
+instance Aeson.ToJSONKey Tile
+
+data TileData =
+  TileData
+    { tileScore :: Integer
+    , tileCount :: Integer
+    } deriving (Generic, Show)
+
+instance Aeson.FromJSON TileData
+instance Aeson.ToJSON TileData
 
 newtype Rack = Rack [Tile]
   deriving (Generic, Show)
@@ -106,6 +116,7 @@ instance Aeson.ToJSON FromClient
 data ToClient
   = Folks { loggedInOthers :: Set Text }
   | Message { msgSentBy :: Text, msgContent :: Text }
+  | UpdateTileData (Map Tile TileData)
   | UpdateBoard Board
   | UpdateRack Rack
   | MoveResult (Either MoveError ())

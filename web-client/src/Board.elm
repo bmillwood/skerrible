@@ -3,24 +3,30 @@ module Board exposing (..)
 import Array exposing (Array)
 import Dict exposing (Dict)
 
-type alias Tile =
-  { char : Char
-  , score : Int
+type Tile
+  = Letter Char
+  | Blank
+
+tileToChar : Tile -> Char
+tileToChar tile =
+  case tile of
+    Letter c -> c
+    Blank -> ' '
+
+tileOfChar : Char -> Maybe Tile
+tileOfChar c =
+  if Char.isAlpha c
+  then Just (Letter (Char.toUpper c))
+  else if c == ' '
+  then Just Blank
+  else Nothing
+
+type alias TileData =
+  { score : Int
+  , count : Int
   }
 
 type alias Rack = List Tile
-
-rackByChar : Rack -> Dict Char (Dict Int Int)
-rackByChar =
-  let
-    addToByScore score =
-      Just
-      << Dict.update score (\count -> Just (1 + Maybe.withDefault 0 count))
-      << Maybe.withDefault Dict.empty
-  in
-  List.foldl
-    (\tile dict -> Dict.update tile.char (addToByScore tile.score) dict)
-    Dict.empty
 
 type alias Square =
   { letterMult : Int

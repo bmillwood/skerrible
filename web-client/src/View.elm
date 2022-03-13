@@ -127,10 +127,10 @@ viewBoard { board, proposedMove, transientError } =
           ] |> List.concat
         char =
           case placed of
-            Just (Move.PlaceTile tile) -> tile.char
+            Just (Move.PlaceTile tile) -> Board.tileToChar tile
             _ ->
               case sq.tile of
-                Just t -> t.char
+                Just t -> Board.tileToChar t
                 Nothing ->
                   case directionIfHere of
                     Nothing -> ' '
@@ -194,7 +194,7 @@ viewRack { rack, rackError } =
       , tileStyle
       ] |> List.concat
     rackTile tile =
-      Html.td attributes [ Html.text (String.fromChar tile.char) ]
+      Html.td attributes [ Html.text (String.fromChar (Board.tileToChar tile)) ]
     spaceTd =
       -- it seems like the cells of a table are stretched to the width of the
       -- table, but we want ours to be fixed size, so we include this one to mop

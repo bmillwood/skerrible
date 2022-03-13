@@ -158,7 +158,7 @@ updateMoveWithKey board rack move key =
     Key.Backspace ->
       Msg.ProposeMove (Just { move | tiles = List.take (List.length move.tiles - 1) move.tiles })
     Key.Enter -> Msg.SendMove
-    Key.Letter c ->
+    Key.Char c ->
       let
         (i, j) = Move.nextPos move
         addTile moveTile =
@@ -169,14 +169,14 @@ updateMoveWithKey board rack move key =
         Just sq ->
           case sq.tile of
             Nothing ->
-              case Dict.get c (Board.rackByChar rack) of
-                Nothing -> Msg.SetTransientError (Just Model.RackError)
-                Just countByScore ->
-                  case List.head (List.reverse (Dict.keys countByScore)) of
-                    Nothing -> Msg.SetTransientError (Just Model.RackError)
-                    Just v -> addTile (Move.PlaceTile { char = c, score = v })
+              case Board.tileOfChar c of
+                Nothing -> Msg.DoNothing
+                Just tile ->
+                  if List.member tile rack
+                  then addTile (Move.PlaceTile tile)
+                  else Msg.SetTransientError (Just Model.RackError)
             Just tile ->
-              if tile.char == c
+              if Board.tileToChar tile == c
               then addTile Move.UseBoard
               else Msg.SetTransientError (Just (Model.SquareError i j))
     Key.Escape ->

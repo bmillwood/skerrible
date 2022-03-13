@@ -18,7 +18,7 @@ decodeChar =
   |> Json.Decode.andThen charOfString
 
 type Key
-  = Letter Char
+  = Char Char
   | Backspace
   | Enter
   | Escape
@@ -29,7 +29,9 @@ decodeKey =
   let
     ofChar c =
       if Char.isAlpha c
-      then Letter (Char.toUpper c)
+      then Char (Char.toUpper c)
+      else if c == ' '
+      then Char ' '
       else Other
   in
   Json.Decode.field "key" Json.Decode.string

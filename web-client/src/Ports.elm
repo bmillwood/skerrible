@@ -52,11 +52,13 @@ encodeDirection d =
   )
 
 encodeTile : Board.Tile -> Json.Encode.Value
-encodeTile { char, score } =
-  Json.Encode.object
-    [ ( "tileChar", Json.Encode.string (String.fromChar char) )
-    , ( "tileScore", Json.Encode.int score )
-    ]
+encodeTile tile =
+  case tile of
+    Board.Letter c ->
+      withTag "Letter"
+        [("contents", Json.Encode.string (String.fromChar c))]
+    Board.Blank ->
+      withTag "Blank" []
 
 encodeMoveTile : Move.Tile -> Json.Encode.Value
 encodeMoveTile moveTile =
@@ -116,6 +118,7 @@ variant { name } values =
 type ServerMsg
   = Folks Model.Folks
   | Message Model.Chat
+  | UpdateTileData Json.Encode.Value
   | UpdateBoard Board.Board
   | UpdateRack Board.Rack
   | MoveResult (Result Move.Error ())
@@ -134,10 +137,11 @@ connectionStatus =
 
 decodeTile : Json.Decode.Decoder Board.Tile
 decodeTile =
-  Json.Decode.map2
-    Board.Tile
-    (Json.Decode.field "tileChar" Key.decodeChar)
-    (Json.Decode.field "tileScore" Json.Decode.int)
+  variant
+    { name = "decodeTile" }
+    [ ("Blank", Plain Board.Blank)
+    , ("Letter", WithContents (Json.Decode.map Board.Letter Key.decodeChar))
+    ]
 
 rack : Json.Decode.Decoder Board.Rack
 rack = Json.Decode.list decodeTile
@@ -205,6 +209,8 @@ serverMsg =
         (Json.Decode.field "msgSentBy" Json.Decode.string)
         (Json.Decode.field "msgContent" Json.Decode.string)
 
+    tileData = Json.Decode.value
+
     posSquare =
       Json.Decode.map3
         (\i j s -> ((i, j), s))
@@ -258,6 +264,7 @@ serverMsg =
     { name = "serverMsg" }
     [ ( "Folks", WithFieldsInline (Json.Decode.map Folks folks) )
     , ( "Message", WithFieldsInline (Json.Decode.map Message message) )
+    , ( "UpdateTileData", WithContents (Json.Decode.map UpdateTileData tileData) )
     , ( "UpdateBoard", WithContents (Json.Decode.map UpdateBoard board) )
     , ( "UpdateRack", WithContents (Json.Decode.map UpdateRack rack) )
     , ( "MoveResult", WithContents (Json.Decode.map MoveResult moveResult) )
@@ -278,6 +285,7 @@ toMsg msgFromJS =
     ServerStatus Disconnected -> Err Msg.ServerDisconnected
     FromServer (Folks folks) -> Ok (Msg.NewFolks folks)
     FromServer (Message chatMsg) -> Ok (Msg.ReceiveMessage chatMsg)
+    FromServer (UpdateTileData _) -> Ok Msg.DoNothing
     FromServer (UpdateBoard board) -> Ok (Msg.UpdateBoard board)
     FromServer (UpdateRack newRack) -> Ok (Msg.UpdateRack newRack)
     FromServer (MoveResult moveResult) -> Ok (Msg.MoveResult moveResult)
