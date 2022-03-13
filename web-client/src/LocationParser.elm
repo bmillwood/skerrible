@@ -27,12 +27,12 @@ defaults =
   , autoLogin = False
   }
 
-protocolWorkaround : String -> String
-protocolWorkaround url =
+protocolWorkaround : { replaceWith : String } -> String -> String
+protocolWorkaround { replaceWith } url =
   case String.split ":" url of
     [] -> url
     protocol :: _ ->
-      "https" ++ String.dropLeft (String.length protocol) url
+      replaceWith ++ String.dropLeft (String.length protocol) url
 
 parseLocation : Json.Decode.Value -> { error : Maybe String, endpoint : String, username : String, autoLogin : Bool }
 parseLocation flags =
@@ -41,17 +41,25 @@ parseLocation flags =
       Json.Decode.decodeValue (Json.Decode.at ["location", "href"] Json.Decode.string) flags
       |> Result.mapError Json.Decode.errorToString
       |> Result.andThen (\href ->
-           Url.fromString (protocolWorkaround href)
+           Url.fromString (protocolWorkaround { replaceWith = "https" } href)
            |> Result.fromMaybe ("Url parsing failed on: " ++ href))
       |> Result.andThen (\url ->
            Url.Parser.parse (Url.Parser.query queryParser) url
+           |> Maybe.map (\query -> (url, query))
            |> Result.fromMaybe ("Query parser failed on url: " ++ Url.toString url))
   in
   case parsedUrl of
     Err msg ->
       { defaults | error = Just msg }
-    Ok { username, autoLogin } ->
+    Ok (url, { username, autoLogin }) ->
+      let
+        endpoint =
+          { url | query = Nothing, fragment = Nothing }
+          |> Url.toString
+          |> protocolWorkaround { replaceWith = "ws" }
+      in
       { defaults
       | username = Maybe.withDefault defaults.username username
       , autoLogin = Maybe.withDefault defaults.autoLogin autoLogin
+      , endpoint = endpoint
       }
