@@ -10,8 +10,9 @@ import Control.Exception
 import Control.Monad
 import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.String (fromString)
 import Data.Void
-import System.Environment (getArgs)
+import System.Environment (getArgs, lookupEnv)
 import qualified System.Random as Random
 
 import qualified Data.Aeson as Aeson
@@ -42,11 +43,21 @@ broadcast ServerState{ clients } msg = do
   withMVar clients $ \clientMap ->
     mapM_ (\chan -> writeChan chan msg) clientMap
 
+warpSettings :: IO Warp.Settings
+warpSettings = do
+  host <- fromString . maybe "localhost" id <$> lookupEnv "HOST"
+  port <- maybe portNumber read <$> lookupEnv "PORT"
+  return
+    $ Warp.setHost host
+    $ Warp.setPort port
+    $ Warp.defaultSettings
+
 main :: IO ()
 main = do
   [staticPath] <- getArgs
   state <- newServerState
-  Warp.runEnv portNumber (waiApp state staticPath)
+  settings <- warpSettings
+  Warp.runSettings settings (waiApp state staticPath)
 
 waiApp :: ServerState -> FilePath -> Wai.Application
 waiApp state staticPath =
