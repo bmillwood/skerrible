@@ -7,7 +7,6 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map as Map
 import Data.Map (Map)
-import Data.Text (Text)
 import qualified System.Random as Random
 
 import Protocol
@@ -78,7 +77,7 @@ data PlayerState =
 
 data GameState =
   GameState
-    { players :: Map Text PlayerState
+    { players :: Map Username PlayerState
     , board :: Board
     , bag :: Map Tile Integer
     , rng :: Random.StdGen
@@ -132,7 +131,7 @@ fillPlayerRack game pst@PlayerState{ rack = Rack tiles } =
     (\drawn -> pst{ rack = Rack (tiles ++ drawn) })
     (drawTiles (rackSize - toInteger (length tiles)) game)
 
-fillRack :: Text -> GameState -> GameState
+fillRack :: Username -> GameState -> GameState
 fillRack username game@GameState{ players } =
     nextGame{ players = newPlayers }
   where
@@ -142,14 +141,14 @@ fillRack username game@GameState{ players } =
         username
         players
 
-addPlayer :: Text -> GameState -> GameState
+addPlayer :: Username -> GameState -> GameState
 addPlayer username game@GameState{ players } =
   nextGame{ players = Map.insert username filledPlayer players }
   where
     (nextGame, filledPlayer) =
       fillPlayerRack game PlayerState{ rack = Rack [], score = 0 }
 
-removePlayer :: Text -> GameState -> GameState
+removePlayer :: Username -> GameState -> GameState
 removePlayer username game =
   game{ players = Map.delete username (players game) }
 
@@ -163,7 +162,7 @@ takeFrom (x : xs) right =
         Right _ -> Left (x :| [])
     (before, _ : after) -> takeFrom xs (before ++ after)
 
-applyMove :: Text -> Move -> GameState -> Either MoveError GameState
+applyMove :: Username -> Move -> GameState -> Either MoveError GameState
 applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players } = do
   tiles <-
     case [tile | PlaceTile tile <- moveTiles] of

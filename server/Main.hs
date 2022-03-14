@@ -8,7 +8,6 @@ import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import qualified Data.Map as Map
-import Data.Text (Text)
 import Data.Void
 import System.Environment (getArgs)
 import qualified System.Random as Random
@@ -23,8 +22,11 @@ import qualified Network.WebSockets as WS
 import Game
 import Protocol
 
-data ServerState
-  = ServerState{ gameStore :: MVar GameState, broadcast :: Chan ToClient }
+data ServerState =
+  ServerState
+    { gameStore :: MVar GameState
+    , broadcast :: Chan ToClient
+    }
 
 newServerState :: IO ServerState
 newServerState = do
@@ -75,7 +77,7 @@ handleConnection state@ServerState{ broadcast } conn = do
       WS.withPingThread conn 30 (print ("ping", loginRequestName)) $ do
         clientBroadcast <- dupChan broadcast
         loggedIn state{ broadcast = clientBroadcast } conn loginRequestName
-    Just other -> putStrLn ("unexpected message: " ++ show other)
+    Just other -> print ("unexpected message", other)
 
 folksMsg :: GameState -> ToClient
 folksMsg game = Folks{ loggedInOthers = Map.keysSet (players game) }
@@ -87,7 +89,7 @@ updatePlayers up ServerState{ broadcast, gameStore } = do
     writeChan broadcast (folksMsg updatedGame)
     return updatedGame
 
-loggedIn :: ServerState -> WS.Connection -> Text -> IO ()
+loggedIn :: ServerState -> WS.Connection -> Username -> IO ()
 loggedIn state conn username = do
   print ("logged in", username)
   updatePlayers (addPlayer username) state
@@ -100,13 +102,13 @@ loggedIn state conn username = do
   () <- absurd readDoesNotReturn
   absurd neitherDoesWrite
 
-sendRack :: WS.Connection -> Text -> GameState -> IO ()
+sendRack :: WS.Connection -> Username -> GameState -> IO ()
 sendRack conn username GameState{ players } =
   case Map.lookup username players of
     Nothing -> print ("sendRack: player missing", username)
     Just PlayerState{ rack } -> sendToClient conn (UpdateRack rack)
 
-playerRead :: ServerState -> WS.Connection -> Text -> IO Void
+playerRead :: ServerState -> WS.Connection -> Username -> IO Void
 playerRead serverState conn username = forever $ do
   msg <- readFromClient conn
   case msg of
@@ -127,7 +129,7 @@ playerRead serverState conn username = forever $ do
             sendToClient conn (MoveResult (Left moveError))
             return game
 
-writeThread :: ServerState -> WS.Connection -> Text -> IO Void
+writeThread :: ServerState -> WS.Connection -> Username -> IO Void
 writeThread ServerState{ gameStore, broadcast } conn username = do
   withMVar gameStore $ \game -> do
     sendToClient conn (folksMsg game)

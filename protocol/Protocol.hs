@@ -105,8 +105,14 @@ data MoveError
 instance Aeson.FromJSON MoveError
 instance Aeson.ToJSON MoveError
 
+newtype Username = Username Text
+  deriving (Eq, Generic, Ord, Show)
+
+instance Aeson.FromJSON Username
+instance Aeson.ToJSON Username
+
 data FromClient
-  = LoginRequest { loginRequestName :: Text }
+  = LoginRequest { loginRequestName :: Username }
   | Chat { msgToSend :: Text }
   | MakeMove Move
   deriving (Generic, Show)
@@ -115,8 +121,8 @@ instance Aeson.FromJSON FromClient
 instance Aeson.ToJSON FromClient
 
 data ToClient
-  = Folks { loggedInOthers :: Set Text }
-  | Message { msgSentBy :: Text, msgContent :: Text }
+  = Folks { loggedInOthers :: Set Username }
+  | Message { msgSentBy :: Username, msgContent :: Text }
   | UpdateTileData (Map Tile TileData)
   | UpdateBoard Board
   | UpdateRack Rack
