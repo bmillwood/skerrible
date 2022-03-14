@@ -38,6 +38,23 @@ tileAtPos rowN colN { startRow, startCol, direction, tiles } =
       then List.head (List.drop (rowN - startRow) tiles)
       else Nothing
 
+remainingRack : Move -> Board.Rack -> Board.Rack
+remainingRack move rack =
+  let
+    deleteFromList x xs =
+      case xs of
+        [] -> []
+        y :: ys -> if x == y then ys else y :: deleteFromList x ys
+  in
+  List.foldl
+    (\t a ->
+      case t of
+        UseBoard -> a
+        PlaceTile tile -> deleteFromList tile a
+    )
+    rack
+    move.tiles
+
 type Error
   = NotPlaying
   | NotYourTurn

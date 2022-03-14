@@ -172,7 +172,7 @@ updateMoveWithKey board rack move key =
               case Board.tileOfChar c of
                 Nothing -> Msg.DoNothing
                 Just tile ->
-                  if List.member tile rack
+                  if List.member tile (Move.remainingRack move rack)
                   then addTile (Move.PlaceTile tile)
                   else Msg.SetTransientError (Just Model.RackError)
             Just tile ->

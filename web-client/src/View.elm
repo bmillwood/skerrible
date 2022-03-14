@@ -275,6 +275,12 @@ view { error, state } =
           Model.PreLogin preLogin ->
             Html.map (Ok << Msg.PreLogin) (viewPreLogin preLogin)
           Model.InGame { chat, game } ->
+            let
+              remainingRack =
+                case game.proposedMove of
+                  Nothing -> game.rack
+                  Just move -> Move.remainingRack move game.rack
+            in
             Html.map Ok (
                 Html.div
                   []
@@ -285,7 +291,7 @@ view { error, state } =
                       }
                   , viewError game.moveError
                   , viewRack
-                      { rack = game.rack
+                      { rack = remainingRack
                       , rackError = game.transientError == Just Model.RackError
                       }
                   , viewChatting chat
