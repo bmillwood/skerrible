@@ -112,7 +112,7 @@ drawTile game@GameState{ bag, rng } =
         (Left 0)
         bag
     decrement key = Map.update (\x -> if x <= 1 then Nothing else Just (x - 1)) key
-    (ix, newRNG) = Random.uniformR (0, numTiles - 1) rng
+    (ix, newRNG) = Random.randomR (0, numTiles - 1) rng
     numTiles = sum bag
 
 drawTiles :: Integer -> GameState -> (GameState, [Tile])
