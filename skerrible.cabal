@@ -38,6 +38,7 @@ executable skerrible-server
     bytestring,
     containers,
     lens,
+    random,
     text,
     wai,
     wai-app-static,

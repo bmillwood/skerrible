@@ -3,9 +3,9 @@ module Game where
 
 import Control.Monad (foldM)
 import qualified Data.Map as Map
-import qualified Data.Set as Set
-import Data.Set (Set)
+import Data.Map (Map)
 import Data.Text (Text)
+import qualified System.Random as Random
 
 import Protocol
 
@@ -66,16 +66,52 @@ applyMove Move{ startPos, direction, tiles } (Board board)
     applyTile oldBoard (pos, moveTile) =
       Map.alterF (updateSquare moveTile) pos oldBoard
 
-data GameState =
-  GameState
-    { folks :: Set Text
-    , board :: Board
+data PlayerState =
+  PlayerState
+    { rack :: Rack
+    , score :: Integer
     }
 
-newGame :: GameState
-newGame = GameState{ folks = Set.empty, board = emptyBoard }
+data GameState =
+  GameState
+    { players :: Map Text PlayerState
+    , board :: Board
+    , bag :: Map Tile Integer
+    , rng :: Random.StdGen
+    }
 
-tileData :: Map.Map Tile TileData
+newGame :: Random.StdGen -> GameState
+newGame rng =
+  GameState
+    { players = Map.empty
+    , board = emptyBoard
+    , bag = fmap tileCount tileData
+    , rng
+    }
+
+initialRack :: Rack
+initialRack =
+  Rack
+    [ Letter 'A'
+    , Letter 'B'
+    , Letter 'C'
+    , Letter 'D'
+    , Letter 'E'
+    , Letter 'F'
+    , Letter 'G'
+    ]
+
+addPlayer :: Text -> GameState -> GameState
+addPlayer username game =
+  game{ players = Map.insert username player (players game) }
+  where
+    player = PlayerState{ rack = initialRack, score = 0 }
+
+removePlayer :: Text -> GameState -> GameState
+removePlayer username game =
+  game{ players = Map.delete username (players game) }
+
+tileData :: Map Tile TileData
 tileData =
   fmap (\(tileScore, tileCount) -> TileData{ tileScore, tileCount })
   $ Map.fromList

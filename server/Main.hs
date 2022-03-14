@@ -7,10 +7,11 @@ import Control.Concurrent.Async
 import Control.Concurrent
 import Control.Exception
 import Control.Monad
-import qualified Data.Set as Set
+import qualified Data.Map as Map
 import Data.Text (Text)
 import Data.Void
 import System.Environment (getArgs)
+import qualified System.Random as Random
 
 import qualified Data.Aeson as Aeson
 import qualified Network.Wai as Wai
@@ -26,7 +27,10 @@ data ServerState
   = ServerState{ gameStore :: MVar GameState, broadcast :: Chan ToClient }
 
 newServerState :: IO ServerState
-newServerState = ServerState <$> newMVar newGame <*> newChan
+newServerState = do
+  gameStore <- newMVar =<< (newGame <$> Random.newStdGen)
+  broadcast <- newChan
+  return ServerState{ gameStore, broadcast }
 
 main :: IO ()
 main = do
@@ -73,26 +77,26 @@ handleConnection state@ServerState{ broadcast } conn = do
         loggedIn state{ broadcast = clientBroadcast } conn loginRequestName
     Just other -> putStrLn ("unexpected message: " ++ show other)
 
-sendBroadcast :: ServerState -> ToClient -> IO ()
-sendBroadcast ServerState{ broadcast } msg = do
-  writeChan broadcast msg
+folksMsg :: GameState -> ToClient
+folksMsg game = Folks{ loggedInOthers = Map.keysSet (players game) }
+
+updatePlayers :: (GameState -> GameState) -> ServerState -> IO ()
+updatePlayers up ServerState{ broadcast, gameStore } = do
+  modifyMVar_ gameStore $ \game -> do
+    let updatedGame = up game
+    writeChan broadcast (folksMsg updatedGame)
+    return updatedGame
 
 loggedIn :: ServerState -> WS.Connection -> Text -> IO ()
-loggedIn state@ServerState{ gameStore } conn username = do
+loggedIn state conn username = do
   print ("logged in", username)
-  modifyMVar_ gameStore $ \game -> do
-    let newFolks = Set.insert username (folks game)
-    sendBroadcast state Folks{ loggedInOthers = newFolks }
-    return game{ folks = newFolks }
+  updatePlayers (addPlayer username) state
   (readDoesNotReturn, neitherDoesWrite) <- concurrently
     (playerRead state conn username)
     (writeThread state conn username)
     `onException` do
-      modifyMVar_ gameStore $ \game -> do
-        print ("disconnected", username)
-        let newFolks = Set.delete username (folks game)
-        sendBroadcast state Folks{ loggedInOthers = newFolks }
-        return game{ folks = newFolks }
+      print ("disconnected", username)
+      updatePlayers (removePlayer username) state
   () <- absurd readDoesNotReturn
   absurd neitherDoesWrite
 
@@ -103,33 +107,27 @@ playerRead serverState conn username = forever $ do
     Nothing -> return ()
     Just LoginRequest{} -> print ("unexpected second login", username, msg)
     Just Chat{ msgToSend } ->
-      sendBroadcast serverState Message{ msgSentBy = username, msgContent = msgToSend }
+      writeChan (broadcast serverState)
+        Message{ msgSentBy = username, msgContent = msgToSend }
     Just (MakeMove move) ->
       modifyMVar_ (gameStore serverState) $ \game ->
         case applyMove move (board game) of
           Right newBoard -> do
             sendToClient conn (MoveResult (Right ()))
-            sendBroadcast serverState (UpdateBoard newBoard)
+            writeChan (broadcast serverState) (UpdateBoard newBoard)
             return game{ board = newBoard }
           Left moveError -> do
             sendToClient conn (MoveResult (Left moveError))
             return game
 
 writeThread :: ServerState -> WS.Connection -> Text -> IO Void
-writeThread ServerState{ gameStore, broadcast } conn _username = do
+writeThread ServerState{ gameStore, broadcast } conn username = do
   withMVar gameStore $ \game -> do
-    sendToClient conn Folks{ loggedInOthers = folks game }
+    sendToClient conn (folksMsg game)
     sendToClient conn (UpdateBoard (board game))
     sendToClient conn (UpdateTileData tileData)
-    sendToClient conn (UpdateRack (Rack
-        [ Letter 'A'
-        , Letter 'B'
-        , Letter 'C'
-        , Letter 'D'
-        , Letter 'E'
-        , Letter 'F'
-        , Letter 'G'
-        ]
-      ))
+    case Map.lookup username (players game) of
+      Nothing -> print ("player immediately missing from game", username)
+      Just PlayerState{ rack } -> sendToClient conn (UpdateRack rack)
   forever $ do
     sendToClient conn =<< readChan broadcast
