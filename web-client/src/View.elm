@@ -258,6 +258,14 @@ viewChatting { folks, me, messageEntry, history } =
 view : Model.Model -> Html Msg
 view { error, state } =
   let
+    title =
+      [ Html.text "skerrible | "
+      , Html.a
+          [ Attributes.href "https://github.com/bmillwood/skerrible" ]
+          [ Html.text "github" ]
+      , Html.hr [] []
+      ]
+
     errorDisplay =
       case error of
         Nothing ->
@@ -268,7 +276,15 @@ view { error, state } =
               , Attributes.style "padding" "1em"
               , Attributes.style "border" "1px solid hsl(0,1,0.5)"
               ]
-              [ Html.text errorMsg ] ]
+              [ Html.text errorMsg
+              , Html.text " "
+              , Html.a
+                  [ Attributes.href "#"
+                  , Events.onClick (Ok Msg.ClearError)
+                  ]
+                  [ Html.text "clear" ]
+              ]
+          ]
 
     stateDisplay =
       [ case state of
@@ -299,4 +315,6 @@ view { error, state } =
               )
       ]
   in
-  Html.div [] (errorDisplay ++ stateDisplay)
+  Html.div
+    []
+    (title ++ errorDisplay ++ stateDisplay)

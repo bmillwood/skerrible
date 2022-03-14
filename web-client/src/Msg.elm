@@ -16,6 +16,7 @@ type LoginFormMsg
 
 type OkMsg
   = DoNothing
+  | ClearError
   | PreLogin LoginFormMsg
   | ComposeMessage String
   | SendMessage String

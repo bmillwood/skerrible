@@ -73,6 +73,7 @@ update msg model =
       in
       case msg of
         Err error -> failed (Msg.errorToString error)
+        Ok Msg.ClearError -> ({ model | error = Nothing }, Cmd.none)
         Ok Msg.DoNothing -> (model, Cmd.none)
         Ok (Msg.ComposeMessage _) -> failed "Can't compose message before login!"
         Ok (Msg.SendMessage _) -> failed "Can't send message before login!"
@@ -109,6 +110,7 @@ update msg model =
       in
       case msg of
         Err errorMsg -> error (Msg.errorToString errorMsg)
+        Ok Msg.ClearError -> ({ model | error = Nothing }, Cmd.none)
         Ok Msg.DoNothing -> (model, Cmd.none)
         Ok (Msg.PreLogin _) -> ( model, Cmd.none )
         Ok (Msg.ComposeMessage composed) ->
