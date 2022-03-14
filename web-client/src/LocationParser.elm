@@ -41,12 +41,14 @@ parseLocation flags =
       Json.Decode.decodeValue (Json.Decode.at ["location", "href"] Json.Decode.string) flags
       |> Result.mapError Json.Decode.errorToString
       |> Result.andThen (\href ->
-           Url.fromString (protocolWorkaround { replaceWith = "https" } href)
-           |> Result.fromMaybe ("Url parsing failed on: " ++ href))
+          Url.fromString (protocolWorkaround { replaceWith = "https" } href)
+          |> Result.fromMaybe ("Url parsing failed on: " ++ href)
+        )
       |> Result.andThen (\url ->
-           Url.Parser.parse (Url.Parser.query queryParser) url
-           |> Maybe.map (\query -> (url, query))
-           |> Result.fromMaybe ("Query parser failed on url: " ++ Url.toString url))
+          Url.Parser.parse (Url.Parser.query queryParser) { url | path = "" }
+          |> Maybe.map (\query -> (url, query))
+          |> Result.fromMaybe ("Query parser failed on url: " ++ Url.toString url)
+        )
   in
   case parsedUrl of
     Err msg ->
