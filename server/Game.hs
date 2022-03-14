@@ -13,6 +13,9 @@ boardWidth, boardHeight :: Integer
 boardWidth = 15
 boardHeight = 15
 
+rackSize :: Integer
+rackSize = 7
+
 isValidPos :: Pos -> Bool
 isValidPos (Pos i j) = i >= 1 && j >= 1 && i <= boardHeight && j <= boardWidth
 
@@ -89,23 +92,61 @@ newGame rng =
     , rng
     }
 
-initialRack :: Rack
-initialRack =
-  Rack
-    [ Letter 'A'
-    , Letter 'B'
-    , Letter 'C'
-    , Letter 'D'
-    , Letter 'E'
-    , Letter 'F'
-    , Letter 'G'
-    ]
+drawTile :: GameState -> Maybe (GameState, Tile)
+drawTile game@GameState{ bag, rng } =
+  case result of
+    Left _ -> Nothing
+    Right tile ->
+      Just (game{ bag = decrement tile bag, rng = newRNG }, tile)
+  where
+    result =
+      Map.foldlWithKey
+        (\c tile tileC ->
+          case c of
+            Right _ -> c
+            Left notEnough ->
+              if notEnough + tileC >= ix
+              then Right tile
+              else Left (notEnough + tileC)
+        )
+        (Left 0)
+        bag
+    decrement key = Map.update (\x -> if x <= 1 then Nothing else Just (x - 1)) key
+    (ix, newRNG) = Random.uniformR (0, numTiles - 1) rng
+    numTiles = sum bag
+
+drawTiles :: Integer -> GameState -> (GameState, [Tile])
+drawTiles n game
+  | n <= 0 = (game, [])
+  | otherwise =
+    case drawTile game of
+      Nothing -> (game, [])
+      Just (nextGame, tile) ->
+        let (finalGame, rest) = drawTiles (n - 1) nextGame in
+        (finalGame, tile : rest)
+
+fillPlayerRack :: GameState -> PlayerState -> (GameState, PlayerState)
+fillPlayerRack game pst@PlayerState{ rack = Rack tiles } =
+  fmap
+    (\drawn -> pst{ rack = Rack (tiles ++ drawn) })
+    (drawTiles (rackSize - toInteger (length tiles)) game)
+
+fillRack :: Text -> GameState -> GameState
+fillRack username game@GameState{ players } =
+    nextGame{ players = newPlayers }
+  where
+    (nextGame, newPlayers) =
+      Map.alterF
+        (maybe (game, Nothing) (fmap Just . fillPlayerRack game))
+        username
+        players
 
 addPlayer :: Text -> GameState -> GameState
-addPlayer username game =
-  game{ players = Map.insert username player (players game) }
+addPlayer username game@GameState{ players } =
+  nextGame{ players = Map.insert username filledPlayer players }
   where
-    player = PlayerState{ rack = initialRack, score = 0 }
+    (nextGame, filledPlayer) =
+      fillPlayerRack game PlayerState{ rack = Rack [], score = 0 }
 
 removePlayer :: Text -> GameState -> GameState
 removePlayer username game =
