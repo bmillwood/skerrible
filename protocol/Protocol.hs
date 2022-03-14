@@ -4,6 +4,7 @@
 module Protocol where
 
 import qualified Data.Aeson as Aeson
+import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
 import Data.Set (Set)
 import Data.Text (Text)
@@ -96,9 +97,9 @@ data MoveError
   | OffBoard
   | TilesDoNotMatchBoard
   | NoPlacedTiles
-  | YouDoNotHave [Tile]
+  | YouDoNotHave (NonEmpty Tile)
   | DoesNotConnect
-  | NotAWord [Move]
+  | NotAWord (NonEmpty Move)
   deriving (Generic, Show)
 
 instance Aeson.FromJSON MoveError

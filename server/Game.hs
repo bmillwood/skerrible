@@ -2,6 +2,9 @@
 module Game where
 
 import Control.Monad (foldM)
+import Data.Bifunctor (first)
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map as Map
 import Data.Map (Map)
 import Data.Text (Text)
@@ -47,11 +50,9 @@ emptyBoard =
       , j <- [1 .. boardWidth]
       ]
 
-applyMove :: Move -> Board -> Either MoveError Board
-applyMove Move{ startPos, direction, tiles } (Board board)
-  | null [() | PlaceTile _ <- tiles] = Left NoPlacedTiles
-  | any (not . isValidPos . fst) posTiles = Left OffBoard
-  | otherwise = Board <$> foldM applyTile board posTiles
+applyMoveToBoard :: Move -> Board -> Either MoveError Board
+applyMoveToBoard Move{ startPos, direction, tiles } (Board board) =
+  Board <$> foldM applyTile board posTiles
   where
     goPos MoveRight n (Pos i j) = Pos i (j + n)
     goPos MoveDown  n (Pos i j) = Pos (i + n) j
@@ -83,8 +84,8 @@ data GameState =
     , rng :: Random.StdGen
     }
 
-newGame :: Random.StdGen -> GameState
-newGame rng =
+createGame :: Random.StdGen -> GameState
+createGame rng =
   GameState
     { players = Map.empty
     , board = emptyBoard
@@ -151,6 +152,33 @@ addPlayer username game@GameState{ players } =
 removePlayer :: Text -> GameState -> GameState
 removePlayer username game =
   game{ players = Map.delete username (players game) }
+
+takeFrom :: (Eq a) => [a] -> [a] -> Either (NonEmpty a) [a]
+takeFrom [] right = Right right
+takeFrom (x : xs) right =
+  case break (== x) right of
+    (_, []) ->
+      case takeFrom xs right of
+        Left others -> Left (NonEmpty.cons x others)
+        Right _ -> Left (x :| [])
+    (before, _ : after) -> takeFrom xs (before ++ after)
+
+applyMove :: Text -> Move -> GameState -> Either MoveError GameState
+applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players } = do
+  tiles <-
+    case [tile | PlaceTile tile <- moveTiles] of
+      [] -> Left NoPlacedTiles
+      tiles -> Right tiles
+  Rack rackTiles <-
+    case Map.lookup username players of
+      Nothing -> Left NotPlaying
+      Just PlayerState{ rack } -> Right rack
+  newRackTiles <- first YouDoNotHave (takeFrom tiles rackTiles)
+  let
+    newPlayers = Map.adjust (\pst -> pst{ rack = Rack newRackTiles }) username players
+  fmap
+    (\newBoard -> fillRack username game{ board = newBoard, players = newPlayers })
+    (applyMoveToBoard move board)
 
 tileData :: Map Tile TileData
 tileData =

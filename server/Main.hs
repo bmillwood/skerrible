@@ -28,7 +28,7 @@ data ServerState
 
 newServerState :: IO ServerState
 newServerState = do
-  gameStore <- newMVar =<< (newGame <$> Random.newStdGen)
+  gameStore <- newMVar =<< (createGame <$> Random.newStdGen)
   broadcast <- newChan
   return ServerState{ gameStore, broadcast }
 
@@ -100,6 +100,12 @@ loggedIn state conn username = do
   () <- absurd readDoesNotReturn
   absurd neitherDoesWrite
 
+sendRack :: WS.Connection -> Text -> GameState -> IO ()
+sendRack conn username GameState{ players } =
+  case Map.lookup username players of
+    Nothing -> print ("sendRack: player missing", username)
+    Just PlayerState{ rack } -> sendToClient conn (UpdateRack rack)
+
 playerRead :: ServerState -> WS.Connection -> Text -> IO Void
 playerRead serverState conn username = forever $ do
   msg <- readFromClient conn
@@ -111,11 +117,12 @@ playerRead serverState conn username = forever $ do
         Message{ msgSentBy = username, msgContent = msgToSend }
     Just (MakeMove move) ->
       modifyMVar_ (gameStore serverState) $ \game ->
-        case applyMove move (board game) of
-          Right newBoard -> do
+        case applyMove username move game of
+          Right nextGame@GameState{ board = newBoard } -> do
             sendToClient conn (MoveResult (Right ()))
+            sendRack conn username nextGame
             writeChan (broadcast serverState) (UpdateBoard newBoard)
-            return game{ board = newBoard }
+            return nextGame
           Left moveError -> do
             sendToClient conn (MoveResult (Left moveError))
             return game
@@ -126,8 +133,6 @@ writeThread ServerState{ gameStore, broadcast } conn username = do
     sendToClient conn (folksMsg game)
     sendToClient conn (UpdateBoard (board game))
     sendToClient conn (UpdateTileData tileData)
-    case Map.lookup username (players game) of
-      Nothing -> print ("player immediately missing from game", username)
-      Just PlayerState{ rack } -> sendToClient conn (UpdateRack rack)
+    sendRack conn username game
   forever $ do
     sendToClient conn =<< readChan broadcast
