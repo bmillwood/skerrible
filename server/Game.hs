@@ -131,26 +131,25 @@ fillPlayerRack game pst@PlayerState{ rack = Rack tiles } =
     (\drawn -> pst{ rack = Rack (tiles ++ drawn) })
     (drawTiles (rackSize - toInteger (length tiles)) game)
 
-fillRack :: Username -> GameState -> GameState
-fillRack username game@GameState{ players } =
+updatePlayer
+  :: (GameState -> Maybe PlayerState -> (GameState, Maybe PlayerState))
+  -> Username -> GameState -> GameState
+updatePlayer f username game@GameState{ players } =
     nextGame{ players = newPlayers }
   where
-    (nextGame, newPlayers) =
-      Map.alterF
-        (maybe (game, Nothing) (fmap Just . fillPlayerRack game))
-        username
-        players
+    (nextGame, newPlayers) = Map.alterF (f game) username players
 
-addPlayer :: Username -> GameState -> GameState
-addPlayer username game@GameState{ players } =
-  nextGame{ players = Map.insert username filledPlayer players }
+fillRack :: Username -> GameState -> GameState
+fillRack =
+  updatePlayer
+    (\game -> maybe (game, Nothing) (fmap Just . fillPlayerRack game))
+
+addPlayerIfAbsent :: Username -> GameState -> GameState
+addPlayerIfAbsent = updatePlayer add
   where
-    (nextGame, filledPlayer) =
-      fillPlayerRack game PlayerState{ rack = Rack [], score = 0 }
-
-removePlayer :: Username -> GameState -> GameState
-removePlayer username game =
-  game{ players = Map.delete username (players game) }
+    add game Nothing =
+      fmap Just (fillPlayerRack game PlayerState{ rack = Rack [], score = 0 })
+    add game (Just p) = (game, Just p)
 
 takeFrom :: (Eq a) => [a] -> [a] -> Either (NonEmpty a) [a]
 takeFrom [] right = Right right

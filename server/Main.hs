@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TupleSections #-}
@@ -8,6 +9,7 @@ import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import qualified Data.Map as Map
+import Data.Map (Map)
 import Data.Void
 import System.Environment (getArgs)
 import qualified System.Random as Random
@@ -25,22 +27,25 @@ import Protocol
 data ServerState =
   ServerState
     { gameStore :: MVar GameState
-    , broadcast :: Chan ToClient
+    , clients :: MVar (Map Username (Chan ToClient))
     }
 
 newServerState :: IO ServerState
 newServerState = do
   gameStore <- newMVar =<< (createGame <$> Random.newStdGen)
-  broadcast <- newChan
-  return ServerState{ gameStore, broadcast }
+  clients <- newMVar Map.empty
+  return ServerState{ gameStore, clients }
+
+broadcast :: ServerState -> ToClient -> IO ()
+broadcast ServerState{ clients } msg = do
+  print ("broadcast", msg)
+  withMVar clients $ \clientMap ->
+    mapM_ (\chan -> writeChan chan msg) clientMap
 
 main :: IO ()
 main = do
   [staticPath] <- getArgs
-  state@ServerState{ broadcast } <- newServerState
-  _ <- forkIO . forever $ do
-    msg <- readChan broadcast
-    print ("broadcast", msg)
+  state <- newServerState
   Warp.runEnv portNumber (waiApp state staticPath)
 
 waiApp :: ServerState -> FilePath -> Wai.Application
@@ -54,9 +59,16 @@ staticApp staticPath =
 wsApp :: ServerState -> WS.ServerApp
 wsApp state = handleConnection state <=< WS.acceptRequest
 
-sendToClient :: WS.Connection -> ToClient -> IO ()
-sendToClient conn msg = do
+sendToConn :: WS.Connection -> ToClient -> IO ()
+sendToConn conn msg = do
   WS.sendTextData conn (Aeson.encode msg)
+
+sendToClient :: ServerState -> Username -> ToClient -> IO ()
+sendToClient ServerState{ clients } username msg =
+  withMVar clients $ \clientsMap ->
+    case Map.lookup username clientsMap of
+      Nothing -> print ("sendToClient: no client", username)
+      Just chan -> writeChan chan msg
 
 readFromClient :: WS.Connection -> IO (Maybe FromClient)
 readFromClient conn = do
@@ -68,45 +80,50 @@ readFromClient conn = do
     Just msg -> return (Just msg)
 
 handleConnection :: ServerState -> WS.Connection -> IO ()
-handleConnection state@ServerState{ broadcast } conn = do
+handleConnection state conn = do
   print "handleConnection"
   msg <- readFromClient conn
   case msg of
     Nothing -> return ()
     Just LoginRequest{ loginRequestName } ->
       WS.withPingThread conn 30 (print ("ping", loginRequestName)) $ do
-        clientBroadcast <- dupChan broadcast
-        loggedIn state{ broadcast = clientBroadcast } conn loginRequestName
+        loggedIn state conn loginRequestName
     Just other -> print ("unexpected message", other)
 
 folksMsg :: GameState -> ToClient
 folksMsg game = Folks{ loggedInOthers = Map.keysSet (players game) }
 
 updatePlayers :: (GameState -> GameState) -> ServerState -> IO ()
-updatePlayers up ServerState{ broadcast, gameStore } = do
+updatePlayers up state@ServerState{ gameStore } = do
   modifyMVar_ gameStore $ \game -> do
     let updatedGame = up game
-    writeChan broadcast (folksMsg updatedGame)
+    broadcast state (folksMsg updatedGame)
     return updatedGame
 
+newtype IOAnd c a = IOAnd { runIOAnd :: IO (c, a) } deriving (Functor)
+
+addClient :: Maybe (Chan ToClient) -> IOAnd (Chan ToClient) (Maybe (Chan ToClient))
+addClient Nothing = IOAnd $ do
+  c <- newChan
+  return (c, Just c)
+addClient (Just c) = IOAnd $ do
+  newC <- dupChan c
+  return (newC, Just c)
+
 loggedIn :: ServerState -> WS.Connection -> Username -> IO ()
-loggedIn state conn username = do
+loggedIn state@ServerState{ clients } conn username = do
   print ("logged in", username)
-  updatePlayers (addPlayer username) state
+  updatePlayers (addPlayerIfAbsent username) state
+  toClientChan <- modifyMVar clients $ \clientMap -> do
+    (chan, newClients) <- runIOAnd (Map.alterF addClient username clientMap)
+    return (newClients, chan)
   (readDoesNotReturn, neitherDoesWrite) <- concurrently
     (playerRead state conn username)
-    (writeThread state conn username)
+    (writeThread state toClientChan conn username)
     `onException` do
       print ("disconnected", username)
-      updatePlayers (removePlayer username) state
   () <- absurd readDoesNotReturn
   absurd neitherDoesWrite
-
-sendRack :: WS.Connection -> Username -> GameState -> IO ()
-sendRack conn username GameState{ players } =
-  case Map.lookup username players of
-    Nothing -> print ("sendRack: player missing", username)
-    Just PlayerState{ rack } -> sendToClient conn (UpdateRack rack)
 
 playerRead :: ServerState -> WS.Connection -> Username -> IO Void
 playerRead serverState conn username = forever $ do
@@ -115,26 +132,30 @@ playerRead serverState conn username = forever $ do
     Nothing -> return ()
     Just LoginRequest{} -> print ("unexpected second login", username, msg)
     Just Chat{ msgToSend } ->
-      writeChan (broadcast serverState)
-        Message{ msgSentBy = username, msgContent = msgToSend }
+      broadcast serverState Message{ msgSentBy = username, msgContent = msgToSend }
     Just (MakeMove move) ->
       modifyMVar_ (gameStore serverState) $ \game ->
         case applyMove username move game of
-          Right nextGame@GameState{ board = newBoard } -> do
-            sendToClient conn (MoveResult (Right ()))
-            sendRack conn username nextGame
-            writeChan (broadcast serverState) (UpdateBoard newBoard)
+          Right nextGame@GameState{ board, players } -> do
+            sendToClient serverState username (MoveResult (Right ()))
+            case Map.lookup username players of
+              Nothing -> print ("sendRack: player missing", username)
+              Just PlayerState{ rack } ->
+                sendToClient serverState username (UpdateRack rack)
+            broadcast serverState (UpdateBoard board)
             return nextGame
           Left moveError -> do
-            sendToClient conn (MoveResult (Left moveError))
+            sendToClient serverState username (MoveResult (Left moveError))
             return game
 
-writeThread :: ServerState -> WS.Connection -> Username -> IO Void
-writeThread ServerState{ gameStore, broadcast } conn username = do
-  withMVar gameStore $ \game -> do
-    sendToClient conn (folksMsg game)
-    sendToClient conn (UpdateBoard (board game))
-    sendToClient conn (UpdateTileData tileData)
-    sendRack conn username game
+writeThread :: ServerState -> Chan ToClient -> WS.Connection -> Username -> IO Void
+writeThread ServerState{ gameStore } toClientChan conn username = do
+  withMVar gameStore $ \game@GameState{ board, players } -> do
+    sendToConn conn (folksMsg game)
+    sendToConn conn (UpdateBoard board)
+    sendToConn conn (UpdateTileData tileData)
+    case Map.lookup username players of
+      Nothing -> print ("sendRack: player missing", username)
+      Just PlayerState{ rack } -> sendToConn conn (UpdateRack rack)
   forever $ do
-    sendToClient conn =<< readChan broadcast
+    sendToConn conn =<< readChan toClientChan
