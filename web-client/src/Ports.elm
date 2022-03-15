@@ -265,6 +265,7 @@ serverMsg =
               (Json.Decode.map Move.YouDoNotHave (Json.Decode.list decodeTile))
           )
         , ( "FirstMoveNotInCentre", Plain Move.FirstMoveNotInCentre )
+        , ( "NoMultiletterWordsMade", Plain Move.NoMultiletterWordsMade )
         , ( "DoesNotConnect", Plain Move.DoesNotConnect )
         , ( "NotAWord"
           , WithContents (Json.Decode.map Move.NotAWord (Json.Decode.list move))

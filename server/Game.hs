@@ -57,9 +57,9 @@ posInMoveAt Move{ startPos = Pos si sj, direction, tiles = _ } i =
     MoveRight -> Pos si (sj + i)
     MoveDown -> Pos (si + i) sj
 
-placedPositionsForMove :: Move -> [Pos]
+placedPositionsForMove :: Move -> [(Pos, Tile)]
 placedPositionsForMove move@Move{ startPos = _, direction = _, tiles } =
-  [posInMoveAt move i | (i, PlaceTile _) <- zip [0 ..] tiles]
+  [(posInMoveAt move i, tile) | (i, PlaceTile tile) <- zip [0 ..] tiles]
 
 isMoveConnected :: Move -> Board -> Bool
 isMoveConnected move (Board board) =
@@ -69,7 +69,7 @@ isMoveConnected move (Board board) =
   where
     neighbouringPositions =
       concatMap
-        (\(Pos i j) -> [Pos (i - 1) j, Pos (i + 1) j, Pos i (j - 1), Pos i (j + 1)])
+        (\(Pos i j, _) -> [Pos (i - 1) j, Pos (i + 1) j, Pos i (j - 1), Pos i (j + 1)])
         (placedPositionsForMove move)
 
 noTilesPlayed :: Board -> Bool
@@ -78,9 +78,14 @@ noTilesPlayed (Board boardMap) = all (isNothing . squareTile) boardMap
 connectednessCheck :: Move -> Board -> Either MoveError ()
 connectednessCheck move board
   | noTilesPlayed board =
-    if any (== boardCentre) (placedPositionsForMove move)
-    then Right ()
-    else Left FirstMoveNotInCentre
+    if not (any (\(pos, _) -> pos == boardCentre) (placedPositionsForMove move))
+    then Left FirstMoveNotInCentre
+    else if null (drop 1 (tiles move))
+    then
+      -- Note that this is only a concern on the first move, since otherwise
+      -- any connected move involves a multi-letter word.
+      Left NoMultiletterWordsMade
+    else Right ()
   | otherwise =
     if isMoveConnected move board
     then Right ()
@@ -105,6 +110,65 @@ applyMoveToBoard move@Move{ startPos, direction, tiles } board@(Board boardMap) 
         Nothing -> Right (Just sq{ squareTile = Just placed })
     applyTile oldBoard (pos, moveTile) =
       Map.alterF (updateSquare moveTile) pos oldBoard
+
+extendMove :: Board -> Move -> Move
+extendMove (Board boardMap) move@Move{ startPos = _, direction, tiles } =
+  Move{ startPos = extendedStartPos, direction, tiles = extendedTiles }
+  where
+    extendedEndTiles = tryExtendTiles (toInteger (length tiles)) []
+    tryExtendTiles k tilesToAdd =
+      case Map.lookup (posInMoveAt move k) boardMap of
+        Just Square{ squareTile = Just _ } ->
+          tryExtendTiles (k + 1) (UseBoard : tilesToAdd)
+        _ -> tiles ++ tilesToAdd
+    (extendedStartPos, extendedTiles) = tryExtendStartPos 0 extendedEndTiles
+    tryExtendStartPos k tilesSoFar =
+      case Map.lookup (posInMoveAt move (k - 1)) boardMap of
+        Just Square{ squareTile = Just _ } ->
+          tryExtendStartPos (k - 1) (UseBoard : tilesSoFar)
+        _ -> (posInMoveAt move k, tilesSoFar)
+
+crossMoves :: Board -> Move -> [Move]
+crossMoves board move@Move{ direction } =
+  filter
+    (not . null . drop 1 . tiles)
+    [ extendMove
+        board
+        Move
+          { startPos = pos
+          , direction = otherDirection direction
+          , tiles = [PlaceTile tile]
+          }
+    | (pos, tile) <- placedPositionsForMove move
+    ]
+  where
+    otherDirection MoveRight = MoveDown
+    otherDirection MoveDown = MoveRight
+
+scoreMove :: Move -> Board -> Integer
+scoreMove move board@(Board boardMap) =
+  maybe 0 scoreOneMove maybeExtendedMove
+  + sum (map scoreOneMove (crossMoves board move))
+  where
+    extendedMove = extendMove board move
+    maybeExtendedMove =
+      if (null . drop 1 . tiles) extendedMove
+      then Nothing
+      else Just extendedMove
+    scoreOneMove oneMove@Move{ tiles } =
+      totalWordMult * sum [getScoreAt i tile | (i, tile) <- zip [0 ..] tiles]
+      where
+        getScoreAt i tile = getScore (Map.lookup (posInMoveAt oneMove i) boardMap) tile
+        getScore sq (PlaceTile tile) = maybe 1 letterMult sq * getTileScore tile
+        getScore sq UseBoard = maybe 0 (maybe 0 getTileScore . squareTile) sq
+        totalWordMult =
+          product
+            [ wordMult
+            | Just Square{ wordMult } <-
+                map
+                  (\(pos, _) -> Map.lookup pos boardMap)
+                  (placedPositionsForMove oneMove)
+            ]
 
 data PlayerState =
   PlayerState
@@ -198,7 +262,7 @@ takeFrom (x : xs) right =
         Right _ -> Left (x :| [])
     (before, _ : after) -> takeFrom xs (before ++ after)
 
-applyMove :: Username -> Move -> GameState -> Either MoveError GameState
+applyMove :: Username -> Move -> GameState -> Either MoveError (GameState, Integer)
 applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players } = do
   tiles <-
     case [tile | PlaceTile tile <- moveTiles] of
@@ -212,7 +276,11 @@ applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players
   let
     newPlayers = Map.adjust (\pst -> pst{ rack = Rack newRackTiles }) username players
   fmap
-    (\newBoard -> fillRack username game{ board = newBoard, players = newPlayers })
+    (\newBoard ->
+      ( fillRack username game{ board = newBoard, players = newPlayers }
+      , scoreMove move board
+      )
+    )
     (applyMoveToBoard move board)
 
 tileData :: Map Tile TileData
@@ -247,3 +315,6 @@ tileData =
     , (Letter 'Y', ( 4,  2))
     , (Letter 'Z', (10,  1))
     ]
+
+getTileScore :: Tile -> Integer
+getTileScore tile = maybe 0 tileScore (Map.lookup tile tileData)

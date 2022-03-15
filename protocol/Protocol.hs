@@ -99,6 +99,7 @@ data MoveError
   | NoPlacedTiles
   | YouDoNotHave (NonEmpty Tile)
   | FirstMoveNotInCentre
+  | NoMultiletterWordsMade
   | DoesNotConnect
   | NotAWord (NonEmpty Move)
   deriving (Generic, Show)

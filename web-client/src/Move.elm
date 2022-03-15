@@ -63,5 +63,6 @@ type Error
   | NoPlacedTiles
   | YouDoNotHave (List Board.Tile)
   | FirstMoveNotInCentre
+  | NoMultiletterWordsMade
   | DoesNotConnect
   | NotAWord (List Move)
