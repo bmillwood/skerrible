@@ -63,9 +63,20 @@ waiApp :: ServerState -> FilePath -> Wai.Application
 waiApp state staticPath =
   WaiWS.websocketsOr WS.defaultConnectionOptions (wsApp state) (staticApp staticPath)
 
+logStaticLookups :: WaiStatic.StaticSettings -> WaiStatic.StaticSettings
+logStaticLookups settings =
+  settings
+    { WaiStatic.ssLookupFile = \pieces ->
+        print ("static", pieces) >> WaiStatic.ssLookupFile settings pieces
+    }
+
 staticApp :: FilePath -> Wai.Application
 staticApp staticPath =
-  WaiStatic.staticApp (WaiStatic.defaultFileServerSettings staticPath)
+  WaiStatic.staticApp settings
+  where
+    settings =
+      logStaticLookups
+      $ WaiStatic.defaultFileServerSettings staticPath
 
 wsApp :: ServerState -> WS.ServerApp
 wsApp state = handleConnection state <=< WS.acceptRequest
