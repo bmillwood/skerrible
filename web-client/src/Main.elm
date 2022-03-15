@@ -142,7 +142,7 @@ update msg model =
             Just move -> ( model, Ports.sendMove move )
         Ok (Msg.MoveResult (Err moveError)) ->
           ( setGame { game | moveError = Just moveError }, Cmd.none )
-        Ok (Msg.MoveResult (Ok ())) ->
+        Ok (Msg.MoveResult (Ok _)) ->
           ( setGame { game | moveError = Nothing, proposedMove = Nothing }, Cmd.none )
         Ok Msg.ClearMoveError ->
           ( setGame { game | moveError = Nothing }, Cmd.none )

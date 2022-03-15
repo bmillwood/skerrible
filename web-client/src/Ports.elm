@@ -122,7 +122,7 @@ type ServerMsg
   | UpdateTileData (DictTile Board.TileData)
   | UpdateBoard Board.Board
   | UpdateRack Board.Rack
-  | MoveResult (Result Move.Error ())
+  | MoveResult (Result Move.Error Int)
 
 type FromJS
   = ServerStatus ConnectionStatus
@@ -277,7 +277,7 @@ serverMsg =
           , WithContents (Json.Decode.map Move.NotAWord (Json.Decode.list move))
           )
         ]
-    moveOk = Json.Decode.succeed ()
+    moveOk = Json.Decode.int
     moveResult = eitherResult moveError moveOk
   in
   variant

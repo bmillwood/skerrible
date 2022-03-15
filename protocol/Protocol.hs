@@ -129,7 +129,7 @@ data ToClient
   | UpdateTileData (Map Tile TileData)
   | UpdateBoard Board
   | UpdateRack Rack
-  | MoveResult (Either MoveError ())
+  | MoveResult (Either MoveError Integer)
   deriving (Generic, Show)
 
 instance Aeson.FromJSON ToClient

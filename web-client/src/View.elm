@@ -1,7 +1,7 @@
 module View exposing (view)
 
 import Array
-import Dict
+import Dict exposing (Dict)
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
@@ -173,7 +173,7 @@ viewBoard { board, tileData, proposedMove, transientError } =
         (\i () -> Html.th [ Attributes.scope "col" ] [ Html.text (colLetter i) ])
         (List.repeat (Board.width board) ())
     headerRow = Html.tr [] (Html.td [] [] :: colHeaders)
-    tableAttributes =
+    boardErrorAttributes =
       case (transientError, proposedMove) of
         (Just Model.BoardError, Just { direction }) ->
           let
@@ -186,8 +186,29 @@ viewBoard { board, tileData, proposedMove, transientError } =
         _ -> []
   in
   Html.table
-    tableAttributes
+    (boardErrorAttributes ++ [ Attributes.style "float" "left" ])
     (headerRow :: List.indexedMap tableRow (Array.toList squares))
+
+viewScores : Dict String Int -> Html msg
+viewScores scores =
+  Html.table [] (
+    Dict.toList scores
+    |> List.sortBy (\(_, score) -> -score)
+    |> List.map (\(person, score) ->
+          Html.tr
+            []
+            [ Html.td [] [ Html.text person ]
+            , Html.td [] [ Html.text (String.fromInt score) ]
+            ]
+        )
+    |> List.append [
+          Html.tr
+            []
+            [ Html.th [] [ Html.text "Username" ]
+            , Html.th [] [ Html.text "Score" ]
+            ]
+        ]
+  )
 
 viewError : Maybe Move.Error -> Html Msg.OkMsg
 viewError error =
@@ -334,12 +355,15 @@ view { error, state } =
                       , proposedMove = game.proposedMove
                       , transientError = game.transientError
                       }
+                  , viewScores game.scores
+                  , Html.hr [ Attributes.style "clear" "both" ] []
                   , viewError game.moveError
                   , viewRack
                       { rack = remainingRack
                       , tileData = game.tileData
                       , rackError = game.transientError == Just Model.RackError
                       }
+                  , Html.hr [ Attributes.style "clear" "both" ] []
                   , viewChatting chat
                   ]
               )

@@ -147,13 +147,13 @@ playerRead serverState conn username = forever $ do
       modifyMVar_ (gameStore serverState) $ \game ->
         case applyMove username move game of
           Right (nextGame@GameState{ board, players }, score) -> do
-            sendToClient serverState username (MoveResult (Right ()))
+            sendToClient serverState username (MoveResult (Right score))
             case Map.lookup username players of
               Nothing -> print ("sendRack: player missing", username)
               Just PlayerState{ rack } ->
                 sendToClient serverState username (UpdateRack rack)
+            broadcast serverState (Scores (scores nextGame))
             broadcast serverState (UpdateBoard board)
-            print ("score for that move", score)
             return nextGame
           Left moveError -> do
             sendToClient serverState username (MoveResult (Left moveError))

@@ -28,7 +28,7 @@ type OkMsg
   | UpdateRack Board.Rack
   | ProposeMove (Maybe Move)
   | SendMove
-  | MoveResult (Result Move.Error ())
+  | MoveResult (Result Move.Error Int)
   | ClearMoveError
   | SetTransientError (Maybe Model.TransientError)
 

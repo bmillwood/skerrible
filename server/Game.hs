@@ -276,15 +276,20 @@ applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players
       Nothing -> Left NotPlaying
       Just PlayerState{ rack } -> Right rack
   newRackTiles <- first YouDoNotHave (takeFrom tiles rackTiles)
+  newBoard <- applyMoveToBoard move board
   let
-    newPlayers = Map.adjust (\pst -> pst{ rack = Rack newRackTiles }) username players
-  fmap
-    (\newBoard ->
-      ( fillRack username game{ board = newBoard, players = newPlayers }
-      , scoreMove move board
-      )
+    moveScore = scoreMove move board -- not newBoard
+    newPlayers =
+      Map.adjust
+        (\pst@PlayerState{ score } ->
+          pst{ rack = Rack newRackTiles, score = score + moveScore }
+        )
+        username
+        players
+  return
+    ( fillRack username game{ board = newBoard, players = newPlayers }
+    , moveScore
     )
-    (applyMoveToBoard move board)
 
 tileData :: Map Tile TileData
 tileData =
