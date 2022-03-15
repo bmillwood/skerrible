@@ -101,14 +101,11 @@ handleConnection state conn = do
         loggedIn state conn loginRequestName
     Just other -> print ("unexpected message", other)
 
-folksMsg :: GameState -> ToClient
-folksMsg game = Folks{ loggedInOthers = Map.keysSet (players game) }
-
 updatePlayers :: (GameState -> GameState) -> ServerState -> IO ()
 updatePlayers up state@ServerState{ gameStore } = do
   modifyMVar_ gameStore $ \game -> do
     let updatedGame = up game
-    broadcast state (folksMsg updatedGame)
+    broadcast state (Scores (scores updatedGame))
     return updatedGame
 
 newtype IOAnd c a = IOAnd { runIOAnd :: IO (c, a) } deriving (Functor)
@@ -124,10 +121,12 @@ addClient (Just c) = IOAnd $ do
 loggedIn :: ServerState -> WS.Connection -> Username -> IO ()
 loggedIn state@ServerState{ clients } conn username = do
   print ("logged in", username)
-  updatePlayers (addPlayerIfAbsent username) state
   toClientChan <- modifyMVar clients $ \clientMap -> do
     (chan, newClients) <- runIOAnd (Map.alterF addClient username clientMap)
     return (newClients, chan)
+  -- the client depends on the Scores update from updatePlayers being the first
+  -- game message it receives, so uh, keep that in mind
+  updatePlayers (addPlayerIfAbsent username) state
   (readDoesNotReturn, neitherDoesWrite) <- concurrently
     (playerRead state conn username)
     (writeThread state toClientChan conn username)
@@ -162,12 +161,11 @@ playerRead serverState conn username = forever $ do
 
 writeThread :: ServerState -> Chan ToClient -> WS.Connection -> Username -> IO Void
 writeThread ServerState{ gameStore } toClientChan conn username = do
-  withMVar gameStore $ \game@GameState{ board, players } -> do
-    sendToConn conn (folksMsg game)
-    sendToConn conn (UpdateBoard board)
-    sendToConn conn (UpdateTileData tileData)
+  withMVar gameStore $ \GameState{ board, players } -> do
+    writeChan toClientChan (UpdateBoard board)
+    writeChan toClientChan (UpdateTileData tileData)
     case Map.lookup username players of
       Nothing -> print ("sendRack: player missing", username)
-      Just PlayerState{ rack } -> sendToConn conn (UpdateRack rack)
+      Just PlayerState{ rack } -> writeChan toClientChan (UpdateRack rack)
   forever $ do
     sendToConn conn =<< readChan toClientChan

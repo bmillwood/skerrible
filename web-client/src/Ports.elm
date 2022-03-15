@@ -117,7 +117,7 @@ variant { name } values =
          Just (WithContents decoder) -> Json.Decode.field "contents" decoder)
 
 type ServerMsg
-  = Folks Model.Folks
+  = Scores (Dict String Int)
   | Message Model.Chat
   | UpdateTileData (DictTile Board.TileData)
   | UpdateBoard Board.Board
@@ -196,13 +196,25 @@ eitherResult decodeErr decodeOk =
     (Json.Decode.maybe (Json.Decode.field "Right" decodeOk))
   |> Json.Decode.andThen ofSides
 
+listOfPairs
+  :  Json.Decode.Decoder a
+  -> Json.Decode.Decoder b
+  -> Json.Decode.Decoder (List (a, b))
+listOfPairs decodeA decodeB =
+  Json.Decode.list (
+    Json.Decode.map2
+      (\x y -> (x, y))
+      (Json.Decode.index 0 decodeA)
+      (Json.Decode.index 1 decodeB)
+  )
+
 serverMsg : Json.Decode.Decoder ServerMsg
 serverMsg =
   let
-    folks =
-      Json.Decode.field
-        "loggedInOthers"
-        (Json.Decode.map Set.fromList (Json.Decode.list Json.Decode.string))
+    scores =
+      Json.Decode.map
+        Dict.fromList
+        (listOfPairs Json.Decode.string Json.Decode.int)
 
     message =
       Json.Decode.map2
@@ -215,13 +227,7 @@ serverMsg =
         Board.TileData
         (Json.Decode.field "tileScore" Json.Decode.int)
         (Json.Decode.field "tileCount" Json.Decode.int)
-    tileDataMap =
-      Json.Decode.list (
-        Json.Decode.map2
-          (\x y -> (x, y))
-          (Json.Decode.index 0 decodeTile)
-          (Json.Decode.index 1 tileData)
-      ) |> Json.Decode.map DictTile.fromList
+    tileDataMap = Json.Decode.map DictTile.fromList (listOfPairs decodeTile tileData)
 
     posSquare =
       Json.Decode.map3
@@ -276,7 +282,7 @@ serverMsg =
   in
   variant
     { name = "serverMsg" }
-    [ ( "Folks", WithFieldsInline (Json.Decode.map Folks folks) )
+    [ ( "Scores", WithContents (Json.Decode.map Scores scores) )
     , ( "Message", WithFieldsInline (Json.Decode.map Message message) )
     , ( "UpdateTileData", WithContents (Json.Decode.map UpdateTileData tileDataMap) )
     , ( "UpdateBoard", WithContents (Json.Decode.map UpdateBoard board) )
@@ -297,7 +303,7 @@ toMsg msgFromJS =
   case msgFromJS of
     ServerStatus Connected -> Ok (Msg.PreLogin Msg.Connected)
     ServerStatus Disconnected -> Err Msg.ServerDisconnected
-    FromServer (Folks folks) -> Ok (Msg.NewFolks folks)
+    FromServer (Scores scores) -> Ok (Msg.UpdateScores scores)
     FromServer (Message chatMsg) -> Ok (Msg.ReceiveMessage chatMsg)
     FromServer (UpdateTileData tileData) -> Ok (Msg.UpdateTileData tileData)
     FromServer (UpdateBoard board) -> Ok (Msg.UpdateBoard board)

@@ -51,11 +51,11 @@ update msg model =
             }
           , Cmd.none
           )
-        loggedIn folks =
+        loggedIn scores =
           ( { model | state =
                 Model.InGame
                   { chat =
-                      { folks = folks
+                      { folks = Set.fromList (Dict.keys scores)
                       , me = preLogin.loginForm.username
                       , messageEntry = ""
                       , history = []
@@ -63,6 +63,7 @@ update msg model =
                   , game =
                       { board = Board.empty
                       , tileData = DictTile.empty
+                      , scores = scores
                       , rack = []
                       , transientError = Nothing
                       , proposedMove = Nothing
@@ -80,7 +81,7 @@ update msg model =
         Ok (Msg.ComposeMessage _) -> failed "Can't compose message before login!"
         Ok (Msg.SendMessage _) -> failed "Can't send message before login!"
         Ok (Msg.ReceiveMessage _) -> failed "Unexpected message before login!"
-        Ok (Msg.NewFolks folks) -> loggedIn folks
+        Ok (Msg.UpdateScores scores) -> loggedIn scores
         Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
         Ok (Msg.UpdateTileData _) -> failed "Unexpected tile data before login!"
         Ok (Msg.UpdateRack _) -> failed "Unexpected rack before login!"
@@ -102,7 +103,6 @@ update msg model =
               ( model
               , Ports.login { username = preLogin.loginForm.username }
               )
-            Msg.Accepted folks -> loggedIn folks
             Msg.Failed error ->
               failed error
     Model.InGame ({ chat, game } as inGame) ->
@@ -146,8 +146,9 @@ update msg model =
           ( setGame { game | moveError = Nothing, proposedMove = Nothing }, Cmd.none )
         Ok Msg.ClearMoveError ->
           ( setGame { game | moveError = Nothing }, Cmd.none )
-        Ok (Msg.NewFolks newFolks) ->
+        Ok (Msg.UpdateScores newScores) ->
           let
+            newFolks = Set.fromList (Dict.keys newScores)
             added =
               Set.diff newFolks chat.folks
               |> Set.toList |> List.map Model.Joined
@@ -155,7 +156,17 @@ update msg model =
               Set.diff chat.folks newFolks
               |> Set.toList |> List.map Model.Left
           in
-          ( setChat { chat | history = added ++ removed ++ chat.history }
+          ( { model
+            | state = Model.InGame
+                { inGame
+                | chat =
+                  { chat
+                  | folks = newFolks
+                  , history = added ++ removed ++ chat.history
+                  }
+                , game = { game | scores = newScores }
+                }
+            }
           , Cmd.none
           )
 

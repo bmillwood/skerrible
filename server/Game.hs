@@ -193,6 +193,9 @@ createGame rng =
     , rng
     }
 
+scores :: GameState -> Map Username Integer
+scores GameState{ players } = Map.map score players
+
 drawTile :: GameState -> Maybe (GameState, Tile)
 drawTile game@GameState{ bag, rng } =
   case result of

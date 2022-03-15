@@ -6,7 +6,6 @@ module Protocol where
 import qualified Data.Aeson as Aeson
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
-import Data.Set (Set)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 
@@ -112,6 +111,8 @@ newtype Username = Username Text
 
 instance Aeson.FromJSON Username
 instance Aeson.ToJSON Username
+instance Aeson.FromJSONKey Username
+instance Aeson.ToJSONKey Username
 
 data FromClient
   = LoginRequest { loginRequestName :: Username }
@@ -123,7 +124,7 @@ instance Aeson.FromJSON FromClient
 instance Aeson.ToJSON FromClient
 
 data ToClient
-  = Folks { loggedInOthers :: Set Username }
+  = Scores (Map Username Integer)
   | Message { msgSentBy :: Username, msgContent :: Text }
   | UpdateTileData (Map Tile TileData)
   | UpdateBoard Board

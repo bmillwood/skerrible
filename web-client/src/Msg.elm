@@ -1,5 +1,6 @@
 module Msg exposing (..)
 
+import Dict exposing (Dict)
 import Set exposing (Set)
 
 import Board exposing (Board)
@@ -12,7 +13,6 @@ type LoginFormMsg
   = Update Model.LoginForm
   | Submit
   | Connected
-  | Accepted Model.Folks
   | Failed String
 
 type OkMsg
@@ -22,7 +22,7 @@ type OkMsg
   | ComposeMessage String
   | SendMessage String
   | ReceiveMessage Model.Chat
-  | NewFolks Model.Folks
+  | UpdateScores (Dict String Int)
   | UpdateBoard Board
   | UpdateTileData (DictTile Board.TileData)
   | UpdateRack Board.Rack

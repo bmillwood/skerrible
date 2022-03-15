@@ -1,5 +1,6 @@
 module Model exposing (..)
 
+import Dict exposing (Dict)
 import Set exposing (Set)
 
 import Board exposing (Board)
@@ -14,6 +15,7 @@ type TransientError
 type alias Game =
   { board : Board
   , tileData : DictTile Board.TileData
+  , scores : Dict String Int
   , rack : Board.Rack
   , proposedMove : Maybe Move
   , moveError : Maybe Move.Error
@@ -45,10 +47,8 @@ type alias PreLoginState =
   , loginForm : LoginForm
   }
 
-type alias Folks = Set String
-
 type alias ChattingState =
-  { folks : Folks
+  { folks : Set String
   , me : String
   , messageEntry : String
   , history : List Message
