@@ -201,6 +201,7 @@ viewError error =
         Just Move.TilesDoNotMatchBoard -> "The tiles you provided don't match the ones on the board."
         Just Move.NoPlacedTiles -> "Your move doesn't use any tiles from your rack."
         Just (Move.YouDoNotHave _) -> "You don't have the letters necessary for that move."
+        Just Move.FirstMoveNotInCentre -> "The first move must go through the centre tile."
         Just Move.DoesNotConnect -> "Your move doesn't connect with existing tiles."
         Just (Move.NotAWord _) -> "At least one of the words you made doesn't exist."
   in

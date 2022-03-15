@@ -98,6 +98,7 @@ data MoveError
   | TilesDoNotMatchBoard
   | NoPlacedTiles
   | YouDoNotHave (NonEmpty Tile)
+  | FirstMoveNotInCentre
   | DoesNotConnect
   | NotAWord (NonEmpty Move)
   deriving (Generic, Show)

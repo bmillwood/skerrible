@@ -62,5 +62,6 @@ type Error
   | TilesDoNotMatchBoard
   | NoPlacedTiles
   | YouDoNotHave (List Board.Tile)
+  | FirstMoveNotInCentre
   | DoesNotConnect
   | NotAWord (List Move)

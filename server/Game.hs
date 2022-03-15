@@ -7,6 +7,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.Maybe (isJust, isNothing)
 import qualified System.Random as Random
 
 import Protocol
@@ -14,6 +15,8 @@ import Protocol
 boardWidth, boardHeight :: Integer
 boardWidth = 15
 boardHeight = 15
+boardCentre :: Pos
+boardCentre = Pos (div (boardHeight + 1) 2) (div (boardWidth + 1) 2)
 
 rackSize :: Integer
 rackSize = 7
@@ -38,7 +41,6 @@ squareAt (Pos i j)
       in
       (i `elem` as && j `elem` bs) || (i `elem` bs && j `elem` as)
 
-
 emptyBoard :: Board
 emptyBoard =
   Board (Map.fromList (map (\p -> (p, squareAt p)) allPositions))
@@ -49,9 +51,44 @@ emptyBoard =
       , j <- [1 .. boardWidth]
       ]
 
+posInMoveAt :: Move -> Integer -> Pos
+posInMoveAt Move{ startPos = Pos si sj, direction, tiles = _ } i =
+  case direction of
+    MoveRight -> Pos si (sj + i)
+    MoveDown -> Pos (si + i) sj
+
+placedPositionsForMove :: Move -> [Pos]
+placedPositionsForMove move@Move{ startPos = _, direction = _, tiles } =
+  [posInMoveAt move i | (i, PlaceTile _) <- zip [0 ..] tiles]
+
+isMoveConnected :: Move -> Board -> Bool
+isMoveConnected move (Board board) =
+  any
+    (\pos -> maybe False (isJust . squareTile) (Map.lookup pos board))
+    neighbouringPositions
+  where
+    neighbouringPositions =
+      concatMap
+        (\(Pos i j) -> [Pos (i - 1) j, Pos (i + 1) j, Pos i (j - 1), Pos i (j + 1)])
+        (placedPositionsForMove move)
+
+noTilesPlayed :: Board -> Bool
+noTilesPlayed (Board boardMap) = all (isNothing . squareTile) boardMap
+
+connectednessCheck :: Move -> Board -> Either MoveError ()
+connectednessCheck move board
+  | noTilesPlayed board =
+    if any (== boardCentre) (placedPositionsForMove move)
+    then Right ()
+    else Left FirstMoveNotInCentre
+  | otherwise =
+    if isMoveConnected move board
+    then Right ()
+    else Left DoesNotConnect
+
 applyMoveToBoard :: Move -> Board -> Either MoveError Board
-applyMoveToBoard Move{ startPos, direction, tiles } (Board board) =
-  Board <$> foldM applyTile board posTiles
+applyMoveToBoard move@Move{ startPos, direction, tiles } board@(Board boardMap) =
+  connectednessCheck move board >> (Board <$> foldM applyTile boardMap posTiles)
   where
     goPos MoveRight n (Pos i j) = Pos i (j + n)
     goPos MoveDown  n (Pos i j) = Pos (i + n) j
