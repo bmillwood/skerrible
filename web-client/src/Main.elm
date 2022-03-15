@@ -9,6 +9,7 @@ import Set
 import Task
 
 import Board exposing (Board)
+import DictTile
 import Key exposing (Key)
 import LocationParser
 import Model exposing (Model)
@@ -61,6 +62,7 @@ update msg model =
                       }
                   , game =
                       { board = Board.empty
+                      , tileData = DictTile.empty
                       , rack = []
                       , transientError = Nothing
                       , proposedMove = Nothing
@@ -80,6 +82,7 @@ update msg model =
         Ok (Msg.ReceiveMessage _) -> failed "Unexpected message before login!"
         Ok (Msg.NewFolks folks) -> loggedIn folks
         Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
+        Ok (Msg.UpdateTileData _) -> failed "Unexpected tile data before login!"
         Ok (Msg.UpdateRack _) -> failed "Unexpected rack before login!"
         Ok (Msg.SetTransientError _) ->
           failed "Unexpected transient error before login!"
@@ -125,6 +128,8 @@ update msg model =
           )
         Ok (Msg.UpdateBoard newBoard) ->
           ( setGame { game | board = newBoard }, Cmd.none )
+        Ok (Msg.UpdateTileData tileData) ->
+          ( setGame { game | tileData = tileData }, Cmd.none )
         Ok (Msg.UpdateRack newRack) ->
           ( setGame { game | rack = newRack }, Cmd.none )
         Ok (Msg.SetTransientError newTransientError) ->

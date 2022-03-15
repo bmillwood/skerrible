@@ -3,6 +3,7 @@ module Model exposing (..)
 import Set exposing (Set)
 
 import Board exposing (Board)
+import DictTile exposing (DictTile)
 import Move exposing (Move)
 
 type TransientError
@@ -12,6 +13,7 @@ type TransientError
 
 type alias Game =
   { board : Board
+  , tileData : DictTile Board.TileData
   , rack : Board.Rack
   , proposedMove : Maybe Move
   , moveError : Maybe Move.Error

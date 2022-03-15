@@ -3,6 +3,7 @@ module Msg exposing (..)
 import Set exposing (Set)
 
 import Board exposing (Board)
+import DictTile exposing (DictTile)
 import Key exposing (Key)
 import Model
 import Move exposing (Move)
@@ -23,6 +24,7 @@ type OkMsg
   | ReceiveMessage Model.Chat
   | NewFolks Model.Folks
   | UpdateBoard Board
+  | UpdateTileData (DictTile Board.TileData)
   | UpdateRack Board.Rack
   | ProposeMove (Maybe Move)
   | SendMove

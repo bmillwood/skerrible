@@ -8,6 +8,7 @@ import Html.Events as Events
 import Json.Decode
 
 import Board exposing (Board)
+import DictTile exposing (DictTile)
 import Model
 import Move exposing (Move)
 import Msg exposing (Msg)
@@ -52,21 +53,51 @@ viewPreLogin { loginState, loginForm } =
 
 tileStyle : List (Html.Attribute msg)
 tileStyle =
-  [ Attributes.style "width" "1.5em"
-  , Attributes.style "height" "1.5em"
+  [ Attributes.style "width" "1.8em"
+  , Attributes.style "height" "1.8em"
   , Attributes.style "text-align" "center"
   ]
 
 tileColor : String
 tileColor = "beige"
 
+viewTile
+  :  Board.Tile
+  -> DictTile Board.TileData
+  -> { partOfMove : Bool, error : Bool }
+  -> Html msg
+viewTile tile tileData { partOfMove, error } =
+  let
+    scoreDisplay =
+      case DictTile.get tile tileData of
+        Nothing -> "?"
+        Just { score } -> String.fromInt score
+    attributes =
+      [ Attributes.style "color" (if partOfMove then "red" else "black")
+      , Attributes.style "background-color" (if error then "red" else tileColor)
+      , Attributes.style "position" "relative"
+      ] ++ tileStyle
+  in
+  Html.td
+    attributes
+    [ Html.text (String.fromChar (Board.tileToChar tile))
+    , Html.span
+        [ Attributes.style "position" "absolute"
+        , Attributes.style "font-size" "50%"
+        , Attributes.style "bottom" "0.2em"
+        , Attributes.style "right" "0.2em"
+        ]
+        [ Html.text scoreDisplay ]
+    ]
+
 viewBoard
   :  { board : Board
+     , tileData : DictTile Board.TileData
      , proposedMove : Maybe Move
      , transientError : Maybe Model.TransientError
      }
   -> Html Msg.OkMsg
-viewBoard { board, proposedMove, transientError } =
+viewBoard { board, tileData, proposedMove, transientError } =
   let
     { top, left, squares } = board
     square rowIx colIx sq =
@@ -81,23 +112,14 @@ viewBoard { board, proposedMove, transientError } =
             Just (Model.SquareError i j) -> i == rowN && j == colN
             _ -> False
         bgColor =
-          if errorHere
-          then "red"
-          else if tileHere
-          then tileColor
-          else
-            case sq.wordMult of
-              3 -> "#f77"
-              2 -> "#fcc"
-              _ ->
-                case sq.letterMult of
-                  3 -> "#88f"
-                  2 -> "#bbf"
-                  _ -> "#ccc"
-        redIfMove =
-          case placed of
-            Nothing -> []
-            Just _ -> [ Attributes.style "color" "#f00" ]
+          case sq.wordMult of
+            3 -> "#f77"
+            2 -> "#fcc"
+            _ ->
+              case sq.letterMult of
+                3 -> "#88f"
+                2 -> "#bbf"
+                _ -> "#ccc"
         directionIfHere =
           case proposedMove of
             Nothing -> Nothing
@@ -122,22 +144,24 @@ viewBoard { board, proposedMove, transientError } =
                         Just Move.Down -> Msg.ProposeMove Nothing
               )
             ]
-          , redIfMove
           , tileStyle
           ] |> List.concat
-        char =
+        tile =
           case placed of
-            Just (Move.PlaceTile tile) -> Board.tileToChar tile
+            Just (Move.PlaceTile t) -> Just t
             _ ->
               case sq.tile of
-                Just t -> Board.tileToChar t
-                Nothing ->
-                  case directionIfHere of
-                    Nothing -> ' '
-                    Just Move.Right -> '→'
-                    Just Move.Down -> '↓'
+                Just t -> Just t
+                Nothing -> Nothing
+        char =
+          case directionIfHere of
+            Nothing -> ' '
+            Just Move.Right -> '→'
+            Just Move.Down -> '↓'
       in
-      Html.td attributes [ Html.text (String.fromChar char) ]
+      case tile of
+        Just t -> viewTile t tileData { partOfMove = isJust placed, error = errorHere }
+        Nothing -> Html.td attributes [ Html.text (String.fromChar char) ]
     rowNumCell n = Html.th [ Attributes.scope "row" ] [ Html.text (String.fromInt (n + 1)) ]
     tableRow rowIx row =
       Html.tr
@@ -186,15 +210,17 @@ viewError error =
     ]
     [ Html.text text ]
 
-viewRack : { rack : Board.Rack, rackError : Bool } -> Html Msg.OkMsg
-viewRack { rack, rackError } =
+viewRack
+  :  { rack : Board.Rack
+     , tileData : DictTile Board.TileData
+     , rackError : Bool
+     }
+  -> Html Msg.OkMsg
+
+viewRack { rack, tileData, rackError } =
   let
-    attributes =
-      [ [ Attributes.style "background-color" tileColor ]
-      , tileStyle
-      ] |> List.concat
     rackTile tile =
-      Html.td attributes [ Html.text (String.fromChar (Board.tileToChar tile)) ]
+      viewTile tile tileData { partOfMove = False, error = False }
     spaceTd =
       -- it seems like the cells of a table are stretched to the width of the
       -- table, but we want ours to be fixed size, so we include this one to mop
@@ -204,10 +230,10 @@ viewRack { rack, rackError } =
   Html.table
     [ Attributes.style "border" "1px solid black"
     , Attributes.style "background-color" (if rackError then "red" else "green")
-    , -- since tds are 1.5em, it seems like this should be 1.5 * 7 = 10.5em, but
+    , -- since tds are 1.8em, it seems like this should be 1.8 * 7 = 12.6em, but
       -- it seems like we need to compensate for padding and margin as well
       -- plus the "real" racks have a bit of extra space in them anyway
-      Attributes.style "width" "14em"
+      Attributes.style "width" "17em"
     ]
     [ Html.tr [] (List.map rackTile rack ++ [ spaceTd ]) ]
 
@@ -302,12 +328,14 @@ view { error, state } =
                   []
                   [ viewBoard
                       { board = game.board
+                      , tileData = game.tileData
                       , proposedMove = game.proposedMove
                       , transientError = game.transientError
                       }
                   , viewError game.moveError
                   , viewRack
                       { rack = remainingRack
+                      , tileData = game.tileData
                       , rackError = game.transientError == Just Model.RackError
                       }
                   , viewChatting chat

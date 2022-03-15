@@ -7,6 +7,7 @@ import Json.Encode
 import Set exposing (Set)
 
 import Board exposing (Board)
+import DictTile exposing (DictTile)
 import Key
 import Model
 import Move exposing (Move)
@@ -118,7 +119,7 @@ variant { name } values =
 type ServerMsg
   = Folks Model.Folks
   | Message Model.Chat
-  | UpdateTileData Json.Encode.Value
+  | UpdateTileData (DictTile Board.TileData)
   | UpdateBoard Board.Board
   | UpdateRack Board.Rack
   | MoveResult (Result Move.Error ())
@@ -209,7 +210,18 @@ serverMsg =
         (Json.Decode.field "msgSentBy" Json.Decode.string)
         (Json.Decode.field "msgContent" Json.Decode.string)
 
-    tileData = Json.Decode.value
+    tileData =
+      Json.Decode.map2
+        Board.TileData
+        (Json.Decode.field "tileScore" Json.Decode.int)
+        (Json.Decode.field "tileCount" Json.Decode.int)
+    tileDataMap =
+      Json.Decode.list (
+        Json.Decode.map2
+          (\x y -> (x, y))
+          (Json.Decode.index 0 decodeTile)
+          (Json.Decode.index 1 tileData)
+      ) |> Json.Decode.map DictTile.fromList
 
     posSquare =
       Json.Decode.map3
@@ -264,7 +276,7 @@ serverMsg =
     { name = "serverMsg" }
     [ ( "Folks", WithFieldsInline (Json.Decode.map Folks folks) )
     , ( "Message", WithFieldsInline (Json.Decode.map Message message) )
-    , ( "UpdateTileData", WithContents (Json.Decode.map UpdateTileData tileData) )
+    , ( "UpdateTileData", WithContents (Json.Decode.map UpdateTileData tileDataMap) )
     , ( "UpdateBoard", WithContents (Json.Decode.map UpdateBoard board) )
     , ( "UpdateRack", WithContents (Json.Decode.map UpdateRack rack) )
     , ( "MoveResult", WithContents (Json.Decode.map MoveResult moveResult) )
@@ -285,7 +297,7 @@ toMsg msgFromJS =
     ServerStatus Disconnected -> Err Msg.ServerDisconnected
     FromServer (Folks folks) -> Ok (Msg.NewFolks folks)
     FromServer (Message chatMsg) -> Ok (Msg.ReceiveMessage chatMsg)
-    FromServer (UpdateTileData _) -> Ok Msg.DoNothing
+    FromServer (UpdateTileData tileData) -> Ok (Msg.UpdateTileData tileData)
     FromServer (UpdateBoard board) -> Ok (Msg.UpdateBoard board)
     FromServer (UpdateRack newRack) -> Ok (Msg.UpdateRack newRack)
     FromServer (MoveResult moveResult) -> Ok (Msg.MoveResult moveResult)
