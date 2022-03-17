@@ -146,17 +146,21 @@ crossMoves board move@Move{ direction } =
     otherDirection MoveDown = MoveRight
 
 scoreMove :: Move -> Board -> Integer
-scoreMove move board@(Board boardMap) =
-  maybe 0 scoreOneMove maybeExtendedMove
+scoreMove move@Move{ tiles } board@(Board boardMap) =
+  allTileBonus
+  + maybe 0 scoreOneMove maybeExtendedMove
   + sum (map scoreOneMove (crossMoves board move))
   where
-    extendedMove = extendMove board move
+    allTileBonus
+      | length [() | PlaceTile _ <- tiles] == rackSize = 50
+      | otherwise = 0
+    extendedMove@Move{ tiles = extendedTiles } = extendMove board move
     maybeExtendedMove =
-      if (null . drop 1 . tiles) extendedMove
+      if null (drop 1 extendedTiles)
       then Nothing
       else Just extendedMove
-    scoreOneMove oneMove@Move{ tiles } =
-      totalWordMult * sum [getScoreAt i tile | (i, tile) <- zip [0 ..] tiles]
+    scoreOneMove oneMove@Move{ tiles = oneTiles } =
+      totalWordMult * sum [getScoreAt i tile | (i, tile) <- zip [0 ..] oneTiles]
       where
         getScoreAt i tile = getScore (Map.lookup (posInMoveAt oneMove i) boardMap) tile
         getScore sq (PlaceTile tile) = maybe 1 letterMult sq * getTileScore tile
