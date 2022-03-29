@@ -152,7 +152,7 @@ scoreMove move@Move{ tiles } board@(Board boardMap) =
   + sum (map scoreOneMove (crossMoves board move))
   where
     allTileBonus
-      | length [() | PlaceTile _ <- tiles] == rackSize = 50
+      | toInteger (length [() | PlaceTile _ <- tiles]) == rackSize = 50
       | otherwise = 0
     extendedMove@Move{ tiles = extendedTiles } = extendMove board move
     maybeExtendedMove =
