@@ -80,7 +80,8 @@ update msg model =
         Ok Msg.DoNothing -> (model, Cmd.none)
         Ok (Msg.ComposeMessage _) -> failed "Can't compose message before login!"
         Ok (Msg.SendMessage _) -> failed "Can't send message before login!"
-        Ok (Msg.ReceiveMessage _) -> failed "Unexpected message before login!"
+        Ok (Msg.ReceiveChatMessage _) -> failed "Unexpected message before login!"
+        Ok (Msg.ReceiveMove _) -> failed "Unexpected move before login!"
         Ok (Msg.UpdateScores scores) -> loggedIn scores
         Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
         Ok (Msg.UpdateTileData _) -> failed "Unexpected tile data before login!"
@@ -122,8 +123,12 @@ update msg model =
           ( setChat { chat | messageEntry = "" }
           , Ports.chat message
           )
-        Ok (Msg.ReceiveMessage chatMsg) ->
+        Ok (Msg.ReceiveChatMessage chatMsg) ->
           ( setChat { chat | history = Model.Chatted chatMsg :: chat.history }
+          , Cmd.none
+          )
+        Ok (Msg.ReceiveMove moveReport) ->
+          ( setChat { chat | history = Model.PlayerMoved moveReport :: chat.history }
           , Cmd.none
           )
         Ok (Msg.UpdateBoard newBoard) ->
@@ -142,7 +147,7 @@ update msg model =
             Just move -> ( model, Ports.sendMove move )
         Ok (Msg.MoveResult (Err moveError)) ->
           ( setGame { game | moveError = Just moveError }, Cmd.none )
-        Ok (Msg.MoveResult (Ok _)) ->
+        Ok (Msg.MoveResult (Ok ())) ->
           ( setGame { game | moveError = Nothing, proposedMove = Nothing }, Cmd.none )
         Ok Msg.ClearMoveError ->
           ( setGame { game | moveError = Nothing }, Cmd.none )

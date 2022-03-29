@@ -118,11 +118,12 @@ variant { name } values =
 
 type ServerMsg
   = Scores (Dict String Int)
-  | Message Model.Chat
+  | ChatMessage Model.Chat
+  | PlayerMoved Model.MoveReport
   | UpdateTileData (DictTile Board.TileData)
   | UpdateBoard Board.Board
   | UpdateRack Board.Rack
-  | MoveResult (Result Move.Error Int)
+  | MoveResult (Result Move.Error ())
 
 type FromJS
   = ServerStatus ConnectionStatus
@@ -219,8 +220,15 @@ serverMsg =
     message =
       Json.Decode.map2
         Model.Chat
-        (Json.Decode.field "msgSentBy" Json.Decode.string)
-        (Json.Decode.field "msgContent" Json.Decode.string)
+        (Json.Decode.field "chatSentBy" Json.Decode.string)
+        (Json.Decode.field "chatContent" Json.Decode.string)
+
+    playerMoved =
+      Json.Decode.map3
+        Model.MoveReport
+        (Json.Decode.field "moveMadeBy" Json.Decode.string)
+        (Json.Decode.field "moveWords" (Json.Decode.list Json.Decode.string))
+        (Json.Decode.field "moveScore" Json.Decode.int)
 
     tileData =
       Json.Decode.map2
@@ -277,13 +285,14 @@ serverMsg =
           , WithContents (Json.Decode.map Move.NotAWord (Json.Decode.list move))
           )
         ]
-    moveOk = Json.Decode.int
+    moveOk = Json.Decode.succeed ()
     moveResult = eitherResult moveError moveOk
   in
   variant
     { name = "serverMsg" }
     [ ( "Scores", WithContents (Json.Decode.map Scores scores) )
-    , ( "Message", WithFieldsInline (Json.Decode.map Message message) )
+    , ( "ChatMessage", WithFieldsInline (Json.Decode.map ChatMessage message) )
+    , ( "PlayerMoved", WithContents (Json.Decode.map PlayerMoved playerMoved) )
     , ( "UpdateTileData", WithContents (Json.Decode.map UpdateTileData tileDataMap) )
     , ( "UpdateBoard", WithContents (Json.Decode.map UpdateBoard board) )
     , ( "UpdateRack", WithContents (Json.Decode.map UpdateRack rack) )
@@ -304,7 +313,8 @@ toMsg msgFromJS =
     ServerStatus Connected -> Ok (Msg.PreLogin Msg.Connected)
     ServerStatus Disconnected -> Err Msg.ServerDisconnected
     FromServer (Scores scores) -> Ok (Msg.UpdateScores scores)
-    FromServer (Message chatMsg) -> Ok (Msg.ReceiveMessage chatMsg)
+    FromServer (ChatMessage chatMsg) -> Ok (Msg.ReceiveChatMessage chatMsg)
+    FromServer (PlayerMoved moveReport) -> Ok (Msg.ReceiveMove moveReport)
     FromServer (UpdateTileData tileData) -> Ok (Msg.UpdateTileData tileData)
     FromServer (UpdateBoard board) -> Ok (Msg.UpdateBoard board)
     FromServer (UpdateRack newRack) -> Ok (Msg.UpdateRack newRack)

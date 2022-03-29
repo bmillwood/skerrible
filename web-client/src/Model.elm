@@ -27,10 +27,17 @@ type alias Chat =
   , message : String
   }
 
+type alias MoveReport =
+  { madeBy : String
+  , words : List String
+  , score : Int
+  }
+
 type Message
   = Joined String
   | Left String
   | Chatted Chat
+  | PlayerMoved MoveReport
 
 type alias LoginForm =
   { endpoint : String

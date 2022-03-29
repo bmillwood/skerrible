@@ -288,17 +288,30 @@ viewChatting { folks, me, messageEntry, history } =
       let
         (username, content) =
           case item of
-            Model.Joined joiner -> (joiner, Html.text "joined")
-            Model.Left leaver -> (leaver, Html.text "left")
+            Model.Joined joiner -> (joiner, [ Html.text "joined" ])
+            Model.Left leaver -> (leaver, [ Html.text "left" ])
             Model.Chatted { sender, message } ->
               ( sender
-              , Html.text (": " ++ message)
+              , [ Html.text (": " ++ message) ]
+              )
+            Model.PlayerMoved { madeBy, words, score } ->
+              ( madeBy
+              , [ [ Html.text "played " ]
+                , List.concatMap
+                    (\word -> [ Html.text ", ", Html.text word ])
+                    words
+                  |> List.drop 1
+                , [ Html.text ", for "
+                  , Html.text (String.fromInt score)
+                  , Html.text " points"
+                  ]
+                ] |> List.concat
               )
       in
       Html.tr
         []
         [ Html.td [] [ Html.text username ]
-        , Html.td [] [ content ]
+        , Html.td [] content
         ]
   in
   Html.table []

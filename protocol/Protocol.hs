@@ -123,13 +123,25 @@ data FromClient
 instance Aeson.FromJSON FromClient
 instance Aeson.ToJSON FromClient
 
+data MoveReport =
+  MoveReport
+    { moveMadeBy :: Username
+    , moveWords :: [String]
+    , moveScore :: Integer
+    }
+  deriving (Generic, Show)
+
+instance Aeson.FromJSON MoveReport
+instance Aeson.ToJSON MoveReport
+
 data ToClient
   = Scores (Map Username Integer)
-  | Message { msgSentBy :: Username, msgContent :: Text }
+  | ChatMessage { chatSentBy :: Username, chatContent :: Text }
+  | PlayerMoved MoveReport
   | UpdateTileData (Map Tile TileData)
   | UpdateBoard Board
   | UpdateRack Rack
-  | MoveResult (Either MoveError Integer)
+  | MoveResult (Either MoveError ())
   deriving (Generic, Show)
 
 instance Aeson.FromJSON ToClient

@@ -34,7 +34,7 @@ testMoveScore :: String -> Integer -> Move -> Board -> Test
 testMoveScore prefix expectedScore move@Move{ tiles } board =
   TestCase
   $ assertEqual (prefix ++ map charOfTile tiles) expectedScore
-  $ scoreMove move board
+  $ snd (scoreMove move board)
   where
     charOfTile UseBoard = '_'
     charOfTile (PlaceTile Blank) = ' '

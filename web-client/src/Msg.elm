@@ -21,14 +21,15 @@ type OkMsg
   | PreLogin LoginFormMsg
   | ComposeMessage String
   | SendMessage String
-  | ReceiveMessage Model.Chat
+  | ReceiveChatMessage Model.Chat
+  | ReceiveMove Model.MoveReport
   | UpdateScores (Dict String Int)
   | UpdateBoard Board
   | UpdateTileData (DictTile Board.TileData)
   | UpdateRack Board.Rack
   | ProposeMove (Maybe Move)
   | SendMove
-  | MoveResult (Result Move.Error Int)
+  | MoveResult (Result Move.Error ())
   | ClearMoveError
   | SetTransientError (Maybe Model.TransientError)
 

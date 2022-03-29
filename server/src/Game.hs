@@ -145,20 +145,31 @@ crossMoves board move@Move{ direction } =
     otherDirection MoveRight = MoveDown
     otherDirection MoveDown = MoveRight
 
-scoreMove :: Move -> Board -> Integer
-scoreMove move@Move{ tiles } board@(Board boardMap) =
-  allTileBonus
-  + maybe 0 scoreOneMove maybeExtendedMove
-  + sum (map scoreOneMove (crossMoves board move))
+wordOfMove :: Board -> Move -> String
+wordOfMove (Board boardMap) move@Move{ tiles } =
+    map (maybe '?' charOfTile . tileOfMoveTile move) (zip [0 ..] tiles)
   where
+    tileOfMoveTile _ (_, PlaceTile tile) = Just tile
+    tileOfMoveTile thisMove (i, UseBoard) =
+      squareTile =<< Map.lookup (posInMoveAt thisMove i) boardMap
+    charOfTile Blank = ' '
+    charOfTile (Letter c) = c
+
+scoreMove :: Move -> Board -> ([String], Integer)
+scoreMove move@Move{ tiles } board@(Board boardMap) =
+  ( map (wordOfMove board) allMoves
+  , allTileBonus + sum (map scoreOneMove allMoves)
+  )
+  where
+    allCrossMoves = crossMoves board move
     allTileBonus
       | toInteger (length [() | PlaceTile _ <- tiles]) == rackSize = 50
       | otherwise = 0
     extendedMove@Move{ tiles = extendedTiles } = extendMove board move
-    maybeExtendedMove =
+    allMoves =
       if null (drop 1 extendedTiles)
-      then Nothing
-      else Just extendedMove
+      then allCrossMoves
+      else extendedMove : allCrossMoves
     scoreOneMove oneMove@Move{ tiles = oneTiles } =
       totalWordMult * sum [getScoreAt i tile | (i, tile) <- zip [0 ..] oneTiles]
       where
@@ -269,7 +280,7 @@ takeFrom (x : xs) right =
         Right _ -> Left (x :| [])
     (before, _ : after) -> takeFrom xs (before ++ after)
 
-applyMove :: Username -> Move -> GameState -> Either MoveError (GameState, Integer)
+applyMove :: Username -> Move -> GameState -> Either MoveError (GameState, MoveReport)
 applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players } = do
   tiles <-
     case [tile | PlaceTile tile <- moveTiles] of
@@ -282,7 +293,7 @@ applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players
   newRackTiles <- first YouDoNotHave (takeFrom tiles rackTiles)
   newBoard <- applyMoveToBoard move board
   let
-    moveScore = scoreMove move board -- not newBoard
+    (moveWords, moveScore) = scoreMove move board -- not newBoard
     newPlayers =
       Map.adjust
         (\pst@PlayerState{ score } ->
@@ -292,7 +303,7 @@ applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players
         players
   return
     ( fillRack username game{ board = newBoard, players = newPlayers }
-    , moveScore
+    , MoveReport{ moveMadeBy = username, moveWords, moveScore }
     )
 
 tileData :: Map Tile TileData

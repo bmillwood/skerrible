@@ -153,12 +153,14 @@ playerRead serverState conn username = forever $ do
     Nothing -> return ()
     Just LoginRequest{} -> print ("unexpected second login", username, msg)
     Just Chat{ msgToSend } ->
-      broadcast serverState Message{ msgSentBy = username, msgContent = msgToSend }
+      broadcast serverState
+        ChatMessage{ chatSentBy = username, chatContent = msgToSend }
     Just (MakeMove move) ->
       modifyMVar_ (gameStore serverState) $ \game ->
         case applyMove username move game of
-          Right (nextGame@GameState{ board, players }, score) -> do
-            sendToClient serverState username (MoveResult (Right score))
+          Right (nextGame@GameState{ board, players }, moveReport) -> do
+            sendToClient serverState username (MoveResult (Right ()))
+            broadcast serverState (PlayerMoved moveReport)
             case Map.lookup username players of
               Nothing -> print ("sendRack: player missing", username)
               Just PlayerState{ rack } ->
