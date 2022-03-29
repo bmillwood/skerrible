@@ -2,7 +2,7 @@
 set -ux
 
 function waitForSource() {
-  inotifywait --quiet -e modify -e delete protocol server
+  inotifywait --quiet -e modify -e delete protocol server/src server/tests
 }
 
 killGrandchild() {
@@ -13,7 +13,8 @@ while sleep 1
 do
   if cabal build
   then
-    cabal run skerrible-server -- server/static-root &
+    cabal run skerrible-server -- static-root &
+    cabal test &
     waitForSource
     jobs -x killGrandchild %%
     wait
