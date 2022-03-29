@@ -9,6 +9,7 @@ import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import qualified Data.Map as Map
+import Data.Function (fix)
 import Data.Map (Map)
 import Data.String (fromString)
 import Data.Void
@@ -104,13 +105,22 @@ readFromClient conn = do
 handleConnection :: ServerState -> WS.Connection -> IO ()
 handleConnection state conn = do
   print "handleConnection"
-  msg <- readFromClient conn
-  case msg of
-    Nothing -> return ()
-    Just LoginRequest{ loginRequestName } ->
-      WS.withPingThread conn 30 (print ("ping", loginRequestName)) $ do
-        loggedIn state conn loginRequestName
-    Just other -> print ("unexpected message", other)
+  fix $ \loop -> do
+    msg <- readFromClient conn
+    case msg of
+      Nothing -> return ()
+      Just LoginRequest{ loginRequestName } ->
+        case validUsername loginRequestName of
+          Just usernameError -> do
+            print ("login failed", usernameError, loginRequestName)
+            sendToConn conn (TechnicalError usernameError)
+            loop
+          Nothing ->
+            WS.withPingThread conn 30 (print ("ping", loginRequestName)) $ do
+              loggedIn state conn loginRequestName
+      Just other -> do
+        sendToConn conn (TechnicalError ProtocolError)
+        print ("unexpected message, dropping connection", other)
 
 updatePlayers :: (GameState -> GameState) -> ServerState -> IO ()
 updatePlayers up state@ServerState{ gameStore } = do
@@ -153,8 +163,13 @@ playerRead serverState conn username = forever $ do
     Nothing -> return ()
     Just LoginRequest{} -> print ("unexpected second login", username, msg)
     Just Chat{ msgToSend } ->
-      broadcast serverState
-        ChatMessage{ chatSentBy = username, chatContent = msgToSend }
+      case validChat msgToSend of
+        Just chatError -> do
+          print ("bad chat", chatError, msgToSend)
+          sendToConn conn (TechnicalError chatError)
+        Nothing ->
+          broadcast serverState
+            ChatMessage{ chatSentBy = username, chatContent = msgToSend }
     Just (MakeMove move) ->
       modifyMVar_ (gameStore serverState) $ \game ->
         case applyMove username move game of

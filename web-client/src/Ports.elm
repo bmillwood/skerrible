@@ -117,7 +117,8 @@ variant { name } values =
          Just (WithContents decoder) -> Json.Decode.field "contents" decoder)
 
 type ServerMsg
-  = Scores (Dict String Int)
+  = TechnicalError String
+  | Scores (Dict String Int)
   | ChatMessage Model.Chat
   | PlayerMoved Model.MoveReport
   | UpdateTileData (DictTile Board.TileData)
@@ -212,6 +213,20 @@ listOfPairs decodeA decodeB =
 serverMsg : Json.Decode.Decoder ServerMsg
 serverMsg =
   let
+    tooLong =
+      Json.Decode.map2
+        (\used limit ->
+          "length " ++ String.fromInt used
+          ++ " exceeds limit " ++ String.fromInt limit)
+        (Json.Decode.field "lengthUsed" Json.Decode.int)
+        (Json.Decode.field "lengthLimit" Json.Decode.int)
+    techErrorMsg =
+      variant
+        { name = "TechErrorMsg" }
+        [ ( "ProtocolError", Plain "Unspecified protocol error :(" )
+        , ( "TooLong", WithFieldsInline tooLong )
+        ]
+
     scores =
       Json.Decode.map
         Dict.fromList
@@ -290,7 +305,8 @@ serverMsg =
   in
   variant
     { name = "serverMsg" }
-    [ ( "Scores", WithContents (Json.Decode.map Scores scores) )
+    [ ( "TechnicalError", WithContents (Json.Decode.map TechnicalError techErrorMsg) )
+    , ( "Scores", WithContents (Json.Decode.map Scores scores) )
     , ( "ChatMessage", WithFieldsInline (Json.Decode.map ChatMessage message) )
     , ( "PlayerMoved", WithContents (Json.Decode.map PlayerMoved playerMoved) )
     , ( "UpdateTileData", WithContents (Json.Decode.map UpdateTileData tileDataMap) )
@@ -312,6 +328,7 @@ toMsg msgFromJS =
   case msgFromJS of
     ServerStatus Connected -> Ok (Msg.PreLogin Msg.Connected)
     ServerStatus Disconnected -> Err Msg.ServerDisconnected
+    FromServer (TechnicalError techErrorMsg) -> Err (Msg.ClientError techErrorMsg)
     FromServer (Scores scores) -> Ok (Msg.UpdateScores scores)
     FromServer (ChatMessage chatMsg) -> Ok (Msg.ReceiveChatMessage chatMsg)
     FromServer (PlayerMoved moveReport) -> Ok (Msg.ReceiveMove moveReport)

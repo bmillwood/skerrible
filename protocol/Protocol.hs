@@ -6,6 +6,7 @@ module Protocol where
 import qualified Data.Aeson as Aeson
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
+import qualified Data.Text as Text
 import Data.Text (Text)
 import GHC.Generics (Generic)
 
@@ -120,6 +121,24 @@ data FromClient
   | MakeMove Move
   deriving (Generic, Show)
 
+data TechErrorMsg
+  = ProtocolError
+  | TooLong { lengthUsed :: Integer, lengthLimit :: Integer }
+  deriving (Generic, Show)
+
+checkTooLong :: Text -> Integer -> Maybe TechErrorMsg
+checkTooLong t lengthLimit
+  | lengthUsed > lengthLimit = Just TooLong{ lengthUsed, lengthLimit }
+  | otherwise = Nothing
+  where
+    lengthUsed = toInteger (Text.length t)
+
+validUsername :: Username -> Maybe TechErrorMsg
+validUsername (Username u) = checkTooLong u 80
+
+validChat :: Text -> Maybe TechErrorMsg
+validChat t = checkTooLong t 1000
+
 instance Aeson.FromJSON FromClient
 instance Aeson.ToJSON FromClient
 
@@ -134,8 +153,12 @@ data MoveReport =
 instance Aeson.FromJSON MoveReport
 instance Aeson.ToJSON MoveReport
 
+instance Aeson.FromJSON TechErrorMsg
+instance Aeson.ToJSON TechErrorMsg
+
 data ToClient
-  = Scores (Map Username Integer)
+  = TechnicalError TechErrorMsg
+  | Scores (Map Username Integer)
   | ChatMessage { chatSentBy :: Username, chatContent :: Text }
   | PlayerMoved MoveReport
   | UpdateTileData (Map Tile TileData)

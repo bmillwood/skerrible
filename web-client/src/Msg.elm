@@ -37,6 +37,7 @@ type Error
   = ServerDisconnected
   | ServerProtocolError String
   | DriverProtocolError String
+  | ClientError String
 
 errorToString : Error -> String
 errorToString error =
@@ -44,5 +45,6 @@ errorToString error =
     ServerDisconnected -> "Server disconnected"
     ServerProtocolError s -> "Server protocol error: " ++ s
     DriverProtocolError s -> "Driver protocol error: " ++ s
+    ClientError s -> "Client error: " ++ s
 
 type alias Msg = Result Error OkMsg
