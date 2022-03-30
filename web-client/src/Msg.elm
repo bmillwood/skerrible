@@ -27,6 +27,7 @@ type OkMsg
   | UpdateBoard Board
   | UpdateTileData (DictTile Board.TileData)
   | UpdateRack Board.Rack
+  | ShuffleRack (Maybe (List Int))
   | ProposeMove (Maybe Move)
   | SendMove
   | MoveResult (Result Move.Error ())

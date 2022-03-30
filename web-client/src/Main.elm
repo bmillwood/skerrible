@@ -5,6 +5,8 @@ import Browser.Events
 import Dict
 import Json.Decode
 import Html exposing (Html)
+import Random
+import Random.List
 import Set
 import Task
 
@@ -86,6 +88,7 @@ update msg model =
         Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
         Ok (Msg.UpdateTileData _) -> failed "Unexpected tile data before login!"
         Ok (Msg.UpdateRack _) -> failed "Unexpected rack before login!"
+        Ok (Msg.ShuffleRack _) -> failed "Unexpected rack shuffle before login!"
         Ok (Msg.SetTransientError _) ->
           failed "Unexpected transient error before login!"
         Ok (Msg.ProposeMove _) -> failed "Can't propose move before login!"
@@ -114,8 +117,8 @@ update msg model =
       in
       case msg of
         Err errorMsg -> error (Msg.errorToString errorMsg)
-        Ok Msg.ClearError -> ({ model | error = Nothing }, Cmd.none)
-        Ok Msg.DoNothing -> (model, Cmd.none)
+        Ok Msg.ClearError -> ( { model | error = Nothing }, Cmd.none )
+        Ok Msg.DoNothing -> ( model, Cmd.none )
         Ok (Msg.PreLogin _) -> ( model, Cmd.none )
         Ok (Msg.ComposeMessage composed) ->
           ( setChat { chat | messageEntry = composed }, Cmd.none )
@@ -137,6 +140,27 @@ update msg model =
           ( setGame { game | tileData = tileData }, Cmd.none )
         Ok (Msg.UpdateRack newRack) ->
           ( setGame { game | rack = newRack }, Cmd.none )
+        Ok (Msg.ShuffleRack Nothing) ->
+          -- Generate a list of indices instead of a shuffled rack to avoid
+          -- overwriting in-flight racks from the server.
+          ( model
+          , Random.generate
+              (Ok << Msg.ShuffleRack << Just)
+              (Random.List.shuffle (List.indexedMap (\i _ -> i) game.rack))
+          )
+        Ok (Msg.ShuffleRack (Just indices)) ->
+          let
+            allIndicesPresent =
+              List.all
+                (\i -> List.member i indices)
+                (List.indexedMap (\i _ -> i) game.rack)
+            newRack = List.filterMap (\i -> List.head (List.drop i game.rack)) indices
+          in
+          if allIndicesPresent
+          then ( setGame { game | rack = newRack }, Cmd.none )
+          else
+            -- Ignoring is fine. You can just click the button again.
+            ( model, Cmd.none )
         Ok (Msg.SetTransientError newTransientError) ->
           ( setGame { game | transientError = newTransientError }, Cmd.none )
         Ok (Msg.ProposeMove move) ->

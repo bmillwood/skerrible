@@ -239,7 +239,6 @@ viewRack
      , rackError : Bool
      }
   -> Html Msg.OkMsg
-
 viewRack { rack, tileData, rackError } =
   let
     rackTile tile =
@@ -250,15 +249,21 @@ viewRack { rack, tileData, rackError } =
       -- up the "unused" width.
       Html.td [] []
   in
-  Html.table
-    [ Attributes.style "border" "1px solid black"
-    , Attributes.style "background-color" (if rackError then "red" else "green")
-    , -- since tds are 1.8em, it seems like this should be 1.8 * 7 = 12.6em, but
-      -- it seems like we need to compensate for padding and margin as well
-      -- plus the "real" racks have a bit of extra space in them anyway
-      Attributes.style "width" "17em"
+  Html.div
+    []
+    [ Html.table
+        [ Attributes.style "border" "1px solid black"
+        , Attributes.style "background-color" (if rackError then "red" else "green")
+        , -- since tds are 1.8em, it seems like this should be 1.8 * 7 = 12.6em, but
+          -- it seems like we need to compensate for padding and margin as well
+          -- plus the "real" racks have a bit of extra space in them anyway
+          Attributes.style "width" "17em"
+        ]
+        [ Html.tr [] (List.map rackTile rack ++ [ spaceTd ]) ]
+    , Html.button
+        [ Events.onClick (Msg.ShuffleRack Nothing) ]
+        [ Html.text "\u{1f500}" ]
     ]
-    [ Html.tr [] (List.map rackTile rack ++ [ spaceTd ]) ]
 
 viewChatting : Model.ChattingState -> Html Msg.OkMsg
 viewChatting { folks, me, messageEntry, history } =
