@@ -29,14 +29,15 @@ import Protocol
 data RoomState =
   RoomState
     { gameStore :: MVar GameState
+    , roomCode :: RoomCode
     , clients :: MVar (Map Username (Chan ToClient))
     }
 
-newRoomState :: IO RoomState
-newRoomState = do
+newRoomState :: RoomCode -> IO RoomState
+newRoomState roomCode = do
   gameStore <- newMVar =<< createGame <$> Random.newStdGen
   clients <- newMVar Map.empty
-  return RoomState{ gameStore, clients }
+  return RoomState{ gameStore, roomCode, clients }
 
 data ServerState = ServerState (MVar (Map RoomCode RoomState))
 
@@ -44,8 +45,8 @@ newServerState :: IO ServerState
 newServerState = ServerState <$> newMVar Map.empty
 
 broadcast :: RoomState -> ToClient -> IO ()
-broadcast RoomState{ clients } msg = do
-  print ("broadcast", msg)
+broadcast RoomState{ clients, roomCode } msg = do
+  print (roomCode, "broadcast", msg)
   withMVar clients $ \clientMap ->
     mapM_ (\chan -> writeChan chan msg) clientMap
 
@@ -92,10 +93,10 @@ sendToConn conn msg = do
   WS.sendTextData conn (Aeson.encode msg)
 
 sendToClient :: RoomState -> Username -> ToClient -> IO ()
-sendToClient RoomState{ clients } username msg =
+sendToClient RoomState{ clients, roomCode } username msg =
   withMVar clients $ \clientsMap ->
     case Map.lookup username clientsMap of
-      Nothing -> print ("sendToClient: no client", username)
+      Nothing -> print (roomCode, "sendToClient: no client", username)
       Just chan -> writeChan chan msg
 
 readFromClient :: WS.Connection -> IO (Maybe FromClient)
@@ -117,7 +118,7 @@ handleConnection (ServerState roomsVar) conn = do
       Just LoginRequest{ loginRequestName, roomSpec } ->
         case validUsername loginRequestName of
           Just usernameError -> do
-            print ("login failed", usernameError, loginRequestName)
+            print ("login failed", usernameError, loginRequestName, roomSpec)
             sendToConn conn (TechnicalError usernameError)
             loop
           Nothing ->
@@ -131,13 +132,13 @@ handleConnection (ServerState roomsVar) conn = do
                         sendToConn conn RoomDoesNotExist
                         return (rooms, loop)
                       Just room ->
-                        return (rooms, joinedRoom code room conn loginRequestName)
+                        return (rooms, joinedRoom room conn loginRequestName)
                   MakeNewRoom -> do
                     code <- unusedRoomCode 4
-                    room <- newRoomState
+                    room <- newRoomState code
                     return
                       ( Map.insert code room rooms
-                      , joinedRoom code room conn loginRequestName
+                      , joinedRoom room conn loginRequestName
                       )
                    where
                     unusedRoomCode len = do
@@ -168,8 +169,8 @@ addClient (Just c) = IOAnd $ do
   newC <- dupChan c
   return (newC, Just c)
 
-joinedRoom :: RoomCode -> RoomState -> WS.Connection -> Username -> IO ()
-joinedRoom roomCode state@RoomState{ clients } conn username = do
+joinedRoom :: RoomState -> WS.Connection -> Username -> IO ()
+joinedRoom state@RoomState{ clients, roomCode } conn username = do
   sendToConn conn (UpdateRoomCode roomCode)
   toClientChan <- modifyMVar clients $ \clientMap -> do
     (chan, newClients) <- runIOAnd (Map.alterF addClient username clientMap)
@@ -179,20 +180,20 @@ joinedRoom roomCode state@RoomState{ clients } conn username = do
     (playerRead state conn username)
     (writeThread state toClientChan conn username)
     `onException` do
-      print ("disconnected", username)
+      print (roomCode, "disconnected", username)
   () <- absurd readDoesNotReturn
   absurd neitherDoesWrite
 
 playerRead :: RoomState -> WS.Connection -> Username -> IO Void
-playerRead roomState conn username = forever $ do
+playerRead roomState@RoomState{ roomCode } conn username = forever $ do
   msg <- readFromClient conn
   case msg of
     Nothing -> return ()
-    Just LoginRequest{} -> print ("unexpected second login", username, msg)
+    Just LoginRequest{} -> print (roomCode, "unexpected second login", username, msg)
     Just Chat{ msgToSend } ->
       case validChat msgToSend of
         Just chatError -> do
-          print ("bad chat", chatError, msgToSend)
+          print (roomCode, "bad chat", chatError, msgToSend)
           sendToConn conn (TechnicalError chatError)
         Nothing ->
           broadcast roomState
@@ -203,7 +204,7 @@ playerRead roomState conn username = forever $ do
           Right (nextGame@GameState{ board, players }, moveReport) -> do
             sendToClient roomState username (MoveResult (Right ()))
             case Map.lookup username players of
-              Nothing -> print ("sendRack: player missing", username)
+              Nothing -> print (roomCode, "sendRack: player missing", username)
               Just PlayerState{ rack } ->
                 sendToClient roomState username (UpdateRack rack)
             mapM_ (broadcast roomState)
@@ -217,12 +218,12 @@ playerRead roomState conn username = forever $ do
             return game
 
 writeThread :: RoomState -> Chan ToClient -> WS.Connection -> Username -> IO Void
-writeThread RoomState{ gameStore } toClientChan conn username = do
+writeThread RoomState{ gameStore, roomCode } toClientChan conn username = do
   withMVar gameStore $ \GameState{ board, players } -> do
     writeChan toClientChan (UpdateBoard board)
     writeChan toClientChan (UpdateTileData tileData)
     case Map.lookup username players of
-      Nothing -> print ("sendRack: player missing", username)
+      Nothing -> print (roomCode, "sendRack: player missing", username)
       Just PlayerState{ rack } -> writeChan toClientChan (UpdateRack rack)
   forever $ do
     sendToConn conn =<< readChan toClientChan
