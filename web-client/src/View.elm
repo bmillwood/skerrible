@@ -40,15 +40,19 @@ viewPreLogin { loginState, loginForm } =
         joinRoomId = "joinRoom"
         makeNewRoomId = "makeNewRoom"
         radio id ifChecked contents =
-          Html.label
-            [ Attributes.for id ]
-            (Html.input
+          Html.p
+            []
+            [ Html.input
                 [ Attributes.type_ "radio"
+                , Attributes.id id
                 , Attributes.name "roomSpec"
                 , Events.onCheck (\_ -> updateSpec ifChecked)
                 ]
                 []
-            :: contents)
+            , Html.label
+                [ Attributes.for id ]
+                contents
+            ]
         roomCodeInput =
           case loginForm.roomSpec of
             Model.JoinRoom code ->
@@ -66,18 +70,12 @@ viewPreLogin { loginState, loginForm } =
                 ]
                 []
       in
-      [ Html.p
-          []
-          [ radio joinRoomId (Model.JoinRoom "")
-              [ Html.text "Join room: "
-              , roomCodeInput
-              ]
+      [ radio joinRoomId (Model.JoinRoom "")
+          [ Html.text "Join room: "
+          , roomCodeInput
           ]
-      , Html.p
-          []
-          [ radio makeNewRoomId Model.MakeNewRoom
-              [ Html.text "Make new room" ]
-          ]
+      , radio makeNewRoomId Model.MakeNewRoom
+          [ Html.text "Make new room" ]
       ]
 
     submitButton =
