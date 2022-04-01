@@ -2,10 +2,11 @@
 set -ux
 while sleep 1
 do
+  inotifywait --quiet -e modify -e delete elm.json src &
   elm make --output=elm.js src/Main.elm
   if [[ "$?" == 0 && "$#" == 2 && "$1" == "--upload" ]]
   then
-      scp elm.js $2
+      scp elm.js "$2"
   fi
-  inotifywait --quiet -e modify -e delete . src src/*
+  wait %inotifywait
 done
