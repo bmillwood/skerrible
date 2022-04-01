@@ -19,7 +19,6 @@ viewPreLogin { loginState, loginForm } =
     endpointInput =
       Html.input
         [ Attributes.type_ "text"
-        , Attributes.name "endpoint"
         , Attributes.value loginForm.endpoint
         , Events.onInput (\input -> Msg.Update { loginForm | endpoint = input })
         , Attributes.disabled (loginState == Model.Waiting)
@@ -29,12 +28,57 @@ viewPreLogin { loginState, loginForm } =
     usernameInput =
       Html.input
         [ Attributes.type_ "text"
-        , Attributes.name "username"
         , Attributes.value loginForm.username
         , Events.onInput (\input -> Msg.Update { loginForm | username = input })
         , Attributes.disabled (loginState == Model.Waiting)
         ]
         []
+
+    roomSpec =
+      let
+        updateSpec spec = Msg.Update { loginForm | roomSpec = spec }
+        joinRoomId = "joinRoom"
+        makeNewRoomId = "makeNewRoom"
+        radio id ifChecked contents =
+          Html.label
+            [ Attributes.for id ]
+            (Html.input
+                [ Attributes.type_ "radio"
+                , Attributes.name "roomSpec"
+                , Events.onCheck (\_ -> updateSpec ifChecked)
+                ]
+                []
+            :: contents)
+        roomCodeInput =
+          case loginForm.roomSpec of
+            Model.JoinRoom code ->
+              Html.input
+                [ Attributes.type_ "text"
+                , Attributes.value code
+                , Events.onInput (\newCode -> updateSpec (Model.JoinRoom newCode))
+                ]
+                []
+            Model.MakeNewRoom ->
+              Html.input
+                [ Attributes.type_ "text"
+                , Attributes.value ""
+                , Attributes.disabled True
+                ]
+                []
+      in
+      [ Html.p
+          []
+          [ radio joinRoomId (Model.JoinRoom "")
+              [ Html.text "Join room: "
+              , roomCodeInput
+              ]
+          ]
+      , Html.p
+          []
+          [ radio makeNewRoomId Model.MakeNewRoom
+              [ Html.text "Make new room" ]
+          ]
+      ]
 
     submitButton =
       Html.input
@@ -48,6 +92,7 @@ viewPreLogin { loginState, loginForm } =
     [ Events.onSubmit Msg.Submit ]
     [ Html.p [] [ Html.text "Server: ", endpointInput ]
     , Html.p [] [ Html.text "Username: ", usernameInput ]
+    , Html.p [] roomSpec
     , Html.p [] [ submitButton ]
     ]
 
@@ -357,7 +402,7 @@ view { error, state } =
       [ case state of
           Model.PreLogin preLogin ->
             Html.map (Ok << Msg.PreLogin) (viewPreLogin preLogin)
-          Model.InGame { chat, game } ->
+          Model.InGame { chat, game, roomCode } ->
             let
               remainingRack =
                 case game.proposedMove of
@@ -367,7 +412,15 @@ view { error, state } =
             Html.map Ok (
                 Html.div
                   []
-                  [ viewBoard
+                  [ Html.p []
+                      [ Html.text "Room code: "
+                      , Html.text roomCode
+                      , Html.text " "
+                      , Html.a
+                          [ Attributes.href ("?room=" ++ roomCode) ]
+                          [ Html.text "link" ]
+                      ]
+                  , viewBoard
                       { board = game.board
                       , tileData = game.tileData
                       , proposedMove = game.proposedMove

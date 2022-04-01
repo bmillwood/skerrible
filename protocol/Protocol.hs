@@ -115,8 +115,22 @@ instance Aeson.ToJSON Username
 instance Aeson.FromJSONKey Username
 instance Aeson.ToJSONKey Username
 
+newtype RoomCode = RoomCode Text
+  deriving (Eq, Generic, Ord, Show)
+
+instance Aeson.FromJSON RoomCode
+instance Aeson.ToJSON RoomCode
+
+data RoomSpec
+  = JoinRoom RoomCode
+  | MakeNewRoom
+  deriving (Generic, Show)
+
+instance Aeson.FromJSON RoomSpec
+instance Aeson.ToJSON RoomSpec
+
 data FromClient
-  = LoginRequest { loginRequestName :: Username }
+  = LoginRequest { loginRequestName :: Username, roomSpec :: RoomSpec }
   | Chat { msgToSend :: Text }
   | MakeMove Move
   deriving (Generic, Show)
@@ -158,6 +172,8 @@ instance Aeson.ToJSON TechErrorMsg
 
 data ToClient
   = TechnicalError TechErrorMsg
+  | RoomDoesNotExist
+  | UpdateRoomCode RoomCode
   | Scores (Map Username Integer)
   | ChatMessage { chatSentBy :: Username, chatContent :: Text }
   | PlayerMoved MoveReport

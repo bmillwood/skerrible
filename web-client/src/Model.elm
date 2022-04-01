@@ -39,9 +39,14 @@ type Message
   | Chatted Chat
   | PlayerMoved MoveReport
 
+type RoomSpec
+  = JoinRoom String
+  | MakeNewRoom
+
 type alias LoginForm =
   { endpoint : String
   , username : String
+  , roomSpec : RoomSpec
   }
 
 type LoginState
@@ -63,7 +68,7 @@ type alias ChattingState =
 
 type State
   = PreLogin PreLoginState
-  | InGame { chat : ChattingState, game : Game }
+  | InGame { roomCode : String, chat : ChattingState, game : Game }
 
 type alias Model =
   { error : Maybe String

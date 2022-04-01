@@ -23,13 +23,21 @@ import View
 init : Json.Decode.Value -> (Model, Cmd Msg)
 init flags =
   let
-    { error, endpoint, username, autoLogin } = LocationParser.parseLocation flags
+    { error, endpoint, username, room, autoLogin }
+      = LocationParser.parseLocation flags
   in
   ( { error = error
     , state =
         Model.PreLogin
           { loginState = Model.NotSubmitted
-          , loginForm = { endpoint = endpoint, username = username }
+          , loginForm =
+              { endpoint = endpoint
+              , username = username
+              , roomSpec =
+                  case room of
+                    Nothing -> Model.MakeNewRoom
+                    Just code -> Model.JoinRoom code
+              }
           }
     }
   , if autoLogin
@@ -53,11 +61,11 @@ update msg model =
             }
           , Cmd.none
           )
-        loggedIn scores =
+        loggedIn roomCode =
           ( { model | state =
                 Model.InGame
                   { chat =
-                      { folks = Set.fromList (Dict.keys scores)
+                      { folks = Set.empty
                       , me = preLogin.loginForm.username
                       , messageEntry = ""
                       , history = []
@@ -65,12 +73,13 @@ update msg model =
                   , game =
                       { board = Board.empty
                       , tileData = DictTile.empty
-                      , scores = scores
+                      , scores = Dict.empty
                       , rack = []
                       , transientError = Nothing
                       , proposedMove = Nothing
                       , moveError = Nothing
                       }
+                  , roomCode = roomCode
                   }
             }
           , Cmd.none
@@ -84,7 +93,8 @@ update msg model =
         Ok (Msg.SendMessage _) -> failed "Can't send message before login!"
         Ok (Msg.ReceiveChatMessage _) -> failed "Unexpected message before login!"
         Ok (Msg.ReceiveMove _) -> failed "Unexpected move before login!"
-        Ok (Msg.UpdateScores scores) -> loggedIn scores
+        Ok (Msg.UpdateRoomCode code) -> loggedIn code
+        Ok (Msg.UpdateScores _) -> failed "Unexpected scores before login!"
         Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
         Ok (Msg.UpdateTileData _) -> failed "Unexpected tile data before login!"
         Ok (Msg.UpdateRack _) -> failed "Unexpected rack before login!"
@@ -105,7 +115,10 @@ update msg model =
               )
             Msg.Connected ->
               ( model
-              , Ports.login { username = preLogin.loginForm.username }
+              , Ports.login
+                  { username = preLogin.loginForm.username
+                  , roomSpec = preLogin.loginForm.roomSpec
+                  }
               )
             Msg.Failed error ->
               failed error
@@ -120,6 +133,8 @@ update msg model =
         Ok Msg.ClearError -> ( { model | error = Nothing }, Cmd.none )
         Ok Msg.DoNothing -> ( model, Cmd.none )
         Ok (Msg.PreLogin _) -> ( model, Cmd.none )
+        Ok (Msg.UpdateRoomCode code) ->
+          ( { model | state = Model.InGame { inGame | roomCode = code } }, Cmd.none )
         Ok (Msg.ComposeMessage composed) ->
           ( setChat { chat | messageEntry = composed }, Cmd.none )
         Ok (Msg.SendMessage message) ->

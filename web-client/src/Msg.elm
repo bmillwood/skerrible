@@ -19,6 +19,7 @@ type OkMsg
   = DoNothing
   | ClearError
   | PreLogin LoginFormMsg
+  | UpdateRoomCode String
   | ComposeMessage String
   | SendMessage String
   | ReceiveChatMessage Model.Chat

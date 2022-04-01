@@ -34,10 +34,18 @@ withTag : String -> List (String, Json.Encode.Value) -> Json.Encode.Value
 withTag tag fields =
   Json.Encode.object (("tag", Json.Encode.string tag) :: fields)
 
-login : { username : String } -> Cmd msg
-login { username } =
-  withTag "LoginRequest" [("loginRequestName", Json.Encode.string username)]
-  |> send
+encodeRoomSpec : Model.RoomSpec -> Json.Encode.Value
+encodeRoomSpec spec =
+  case spec of
+    Model.JoinRoom room -> withTag "JoinRoom" [("contents", Json.Encode.string room)]
+    Model.MakeNewRoom -> withTag "MakeNewRoom" []
+
+login : { username : String, roomSpec : Model.RoomSpec } -> Cmd msg
+login { username, roomSpec } =
+  withTag "LoginRequest"
+  [ ( "loginRequestName", Json.Encode.string username )
+  , ( "roomSpec", encodeRoomSpec roomSpec )
+  ] |> send
 
 chat : String -> Cmd msg
 chat message =
@@ -118,6 +126,8 @@ variant { name } values =
 
 type ServerMsg
   = TechnicalError String
+  | RoomDoesNotExist
+  | UpdateRoomCode String
   | Scores (Dict String Int)
   | ChatMessage Model.Chat
   | PlayerMoved Model.MoveReport
@@ -227,6 +237,8 @@ serverMsg =
         , ( "TooLong", WithFieldsInline tooLong )
         ]
 
+    roomCode = Json.Decode.string
+
     scores =
       Json.Decode.map
         Dict.fromList
@@ -306,6 +318,8 @@ serverMsg =
   variant
     { name = "serverMsg" }
     [ ( "TechnicalError", WithContents (Json.Decode.map TechnicalError techErrorMsg) )
+    , ( "RoomDoesNotExist", Plain RoomDoesNotExist )
+    , ( "UpdateRoomCode", WithContents (Json.Decode.map UpdateRoomCode roomCode) )
     , ( "Scores", WithContents (Json.Decode.map Scores scores) )
     , ( "ChatMessage", WithFieldsInline (Json.Decode.map ChatMessage message) )
     , ( "PlayerMoved", WithContents (Json.Decode.map PlayerMoved playerMoved) )
@@ -329,6 +343,8 @@ toMsg msgFromJS =
     ServerStatus Connected -> Ok (Msg.PreLogin Msg.Connected)
     ServerStatus Disconnected -> Err Msg.ServerDisconnected
     FromServer (TechnicalError techErrorMsg) -> Err (Msg.ClientError techErrorMsg)
+    FromServer RoomDoesNotExist -> Ok (Msg.PreLogin (Msg.Failed "Room does not exist"))
+    FromServer (UpdateRoomCode code) -> Ok (Msg.UpdateRoomCode code)
     FromServer (Scores scores) -> Ok (Msg.UpdateScores scores)
     FromServer (ChatMessage chatMsg) -> Ok (Msg.ReceiveChatMessage chatMsg)
     FromServer (PlayerMoved moveReport) -> Ok (Msg.ReceiveMove moveReport)

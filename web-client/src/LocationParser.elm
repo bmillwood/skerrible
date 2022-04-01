@@ -8,22 +8,28 @@ import Url
 import Url.Parser
 import Url.Parser.Query
 
-type alias QueryParams = { username : Maybe String, autoLogin : Maybe Bool }
+type alias QueryParams =
+  { username : Maybe String
+  , room : Maybe String
+  , autoLogin : Maybe Bool
+  }
 
 queryParser =
   let
     bool name =
       Url.Parser.Query.enum name (Dict.fromList [ ("true", True), ("false", False) ])
   in
-  Url.Parser.Query.map2
+  Url.Parser.Query.map3
     QueryParams
     (Url.Parser.Query.string "username")
+    (Url.Parser.Query.string "room")
     (bool "autoLogin")
 
 defaults =
   { error = Nothing
   , endpoint = "ws://localhost:4170"
   , username = ""
+  , room = Nothing
   , autoLogin = False
   }
 
@@ -34,7 +40,14 @@ protocolWorkaround { replaceWith } url =
     protocol :: _ ->
       replaceWith ++ String.dropLeft (String.length protocol) url
 
-parseLocation : Json.Decode.Value -> { error : Maybe String, endpoint : String, username : String, autoLogin : Bool }
+parseLocation
+  :  Json.Decode.Value
+  -> { error : Maybe String
+     , endpoint : String
+     , username : String
+     , room : Maybe String
+     , autoLogin : Bool
+     }
 parseLocation flags =
   let
     parsedUrl =
@@ -53,7 +66,7 @@ parseLocation flags =
   case parsedUrl of
     Err msg ->
       { defaults | error = Just msg }
-    Ok (url, { username, autoLogin }) ->
+    Ok (url, { username, room, autoLogin }) ->
       let
         endpoint =
           { url | query = Nothing, fragment = Nothing }
@@ -62,6 +75,7 @@ parseLocation flags =
       in
       { defaults
       | username = Maybe.withDefault defaults.username username
+      , room = room
       , autoLogin = Maybe.withDefault defaults.autoLogin autoLogin
       , endpoint = endpoint
       }
