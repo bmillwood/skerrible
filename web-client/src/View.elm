@@ -62,20 +62,49 @@ viewPreLogin { loginState, loginForm } =
                 , Events.onInput (\newCode -> updateSpec (Model.JoinRoom newCode))
                 ]
                 []
-            Model.MakeNewRoom ->
+            Model.MakeNewRoom _ ->
               Html.input
                 [ Attributes.type_ "text"
                 , Attributes.value ""
                 , Attributes.disabled True
                 ]
                 []
+
+        noBoardMultipliers =
+          let
+            id = "noBoardMultipliers"
+            (checked, disabled, newSpec) =
+              case loginForm.roomSpec of
+                Model.MakeNewRoom settings ->
+                  ( settings.noBoardMultipliers
+                  , False
+                  , (\b -> Model.MakeNewRoom { settings | noBoardMultipliers = b })
+                  )
+                Model.JoinRoom _ -> (False, True, always loginForm.roomSpec)
+          in
+          Html.p
+            [ Attributes.style "margin-left" "1em" ]
+            [ Html.input
+                [ Attributes.type_ "checkbox"
+                , Attributes.id id
+                , Attributes.checked checked
+                , Attributes.disabled disabled
+                , Events.onCheck (\newChecked -> updateSpec (newSpec newChecked))
+                ]
+                []
+            , Html.label
+                [ Attributes.for id ]
+                [ Html.text "Disable multiplier squares" ]
+            ]
       in
       [ radio joinRoomId (Model.JoinRoom "")
           [ Html.text "Join room: "
           , roomCodeInput
           ]
-      , radio makeNewRoomId Model.MakeNewRoom
-          [ Html.text "Make new room" ]
+      , radio makeNewRoomId (Model.MakeNewRoom { noBoardMultipliers = False })
+          [ Html.text "Make new room:"
+          , noBoardMultipliers
+          ]
       ]
 
     submitButton =

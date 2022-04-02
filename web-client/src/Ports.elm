@@ -38,7 +38,13 @@ encodeRoomSpec : Model.RoomSpec -> Json.Encode.Value
 encodeRoomSpec spec =
   case spec of
     Model.JoinRoom room -> withTag "JoinRoom" [("contents", Json.Encode.string room)]
-    Model.MakeNewRoom -> withTag "MakeNewRoom" []
+    Model.MakeNewRoom { noBoardMultipliers } ->
+      withTag "MakeNewRoom"
+        [ ( "contents"
+          , Json.Encode.object
+              [ ( "noBoardMultipliers", Json.Encode.bool noBoardMultipliers ) ]
+          )
+        ]
 
 login : { username : String, roomSpec : Model.RoomSpec } -> Cmd msg
 login { username, roomSpec } =

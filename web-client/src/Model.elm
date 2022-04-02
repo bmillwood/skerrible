@@ -41,7 +41,7 @@ type Message
 
 type RoomSpec
   = JoinRoom String
-  | MakeNewRoom
+  | MakeNewRoom { noBoardMultipliers : Bool }
 
 type alias LoginForm =
   { endpoint : String

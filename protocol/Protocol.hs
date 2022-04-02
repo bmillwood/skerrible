@@ -121,9 +121,16 @@ newtype RoomCode = RoomCode Text
 instance Aeson.FromJSON RoomCode
 instance Aeson.ToJSON RoomCode
 
+data RoomSettings = RoomSettings
+  { noBoardMultipliers :: Bool }
+  deriving (Generic, Show)
+
+instance Aeson.FromJSON RoomSettings
+instance Aeson.ToJSON RoomSettings
+
 data RoomSpec
   = JoinRoom RoomCode
-  | MakeNewRoom
+  | MakeNewRoom RoomSettings
   deriving (Generic, Show)
 
 instance Aeson.FromJSON RoomSpec

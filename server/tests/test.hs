@@ -18,11 +18,14 @@ moveTiles = map (moveTile . tileOfChar)
     moveTile Nothing = UseBoard
     moveTile (Just t) = PlaceTile t
 
+normalNewBoard :: Board
+normalNewBoard = newBoard RoomSettings{ noBoardMultipliers = False }
+
 testBoard :: Pos -> [String] -> Board
 testBoard (Pos startRow startCol) rows =
-  Board (foldl updateRow emptyBoardMap (zip [startRow ..] rows))
+  Board (foldl updateRow newBoardMap (zip [startRow ..] rows))
   where
-    Board emptyBoardMap = emptyBoard
+    Board newBoardMap = normalNewBoard
     updateRow board (rowN, row) =
       foldl (update rowN) board (zip [startCol ..] row)
     update rowN board (colN, letter) =
@@ -43,11 +46,12 @@ testMoveScore prefix expectedScore move@Move{ tiles } board =
 moveScores :: [(Integer, Move)] -> Test
 moveScores moves = TestList finalTests
   where
-    (finalTests, _) = foldl testMove ([], emptyBoard) (zip [(1 :: Integer) ..] moves)
+    (finalTests, _) =
+      foldl testMove ([], normalNewBoard) (zip [(1 :: Integer) ..] moves)
     testMove (tests, board) (i, (expectedScore, move)) =
       ( scoreTest : moveTest : tests
       , case moveResult of
-          Right newBoard -> newBoard
+          Right nextBoard -> nextBoard
           Left _ ->
             -- This is pretty silly because it means failures are likely to compound.
             -- But we care more about testing scores anyway.

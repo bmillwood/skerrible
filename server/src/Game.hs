@@ -24,25 +24,8 @@ rackSize = 7
 isValidPos :: Pos -> Bool
 isValidPos (Pos i j) = i >= 1 && j >= 1 && i <= boardHeight && j <= boardWidth
 
-squareAt :: Pos -> Square
-squareAt (Pos i j)
-  | any isPos [(1, 1), (1, 8)] = emptySquare 1 3
-  | any (\x -> isPos (x, x)) [2, 3, 4, 5, 8] = emptySquare 1 2
-  | any isPos [(2, 6), (6, 6)] = emptySquare 3 1
-  | any isPos [(1, 4), (3, 7), (4, 8), (7, 7)] = emptySquare 2 1
-  | otherwise = emptySquare 1 1
-  where
-    emptySquare letterMult wordMult =
-      Square { letterMult, wordMult, squareTile = Nothing }
-    isPos (a, b) =
-      let
-        as = [a, boardHeight + 1 - a]
-        bs = [b, boardWidth + 1 - b]
-      in
-      (i `elem` as && j `elem` bs) || (i `elem` bs && j `elem` as)
-
-emptyBoard :: Board
-emptyBoard =
+newBoard :: RoomSettings -> Board
+newBoard RoomSettings{ noBoardMultipliers } =
   Board (Map.fromList (map (\p -> (p, squareAt p)) allPositions))
   where
     allPositions =
@@ -50,6 +33,22 @@ emptyBoard =
       | i <- [1 .. boardHeight]
       , j <- [1 .. boardWidth]
       ]
+    squareAt (Pos i j)
+      | noBoardMultipliers = emptySquare 1 1
+      | any isPos [(1, 1), (1, 8)] = emptySquare 1 3
+      | any (\x -> isPos (x, x)) [2, 3, 4, 5, 8] = emptySquare 1 2
+      | any isPos [(2, 6), (6, 6)] = emptySquare 3 1
+      | any isPos [(1, 4), (3, 7), (4, 8), (7, 7)] = emptySquare 2 1
+      | otherwise = emptySquare 1 1
+      where
+        emptySquare letterMult wordMult =
+          Square { letterMult, wordMult, squareTile = Nothing }
+        isPos (a, b) =
+          let
+            as = [a, boardHeight + 1 - a]
+            bs = [b, boardWidth + 1 - b]
+          in
+          (i `elem` as && j `elem` bs) || (i `elem` bs && j `elem` as)
 
 posInMoveAt :: Move -> Integer -> Pos
 posInMoveAt Move{ startPos = Pos si sj, direction, tiles = _ } i =
@@ -199,11 +198,11 @@ data GameState =
     , rng :: Random.StdGen
     }
 
-createGame :: Random.StdGen -> GameState
-createGame rng =
+createGame :: RoomSettings -> Random.StdGen -> GameState
+createGame settings rng =
   GameState
     { players = Map.empty
-    , board = emptyBoard
+    , board = newBoard settings
     , bag = fmap tileCount tileData
     , rng
     }
@@ -291,9 +290,9 @@ applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players
       Nothing -> Left NotPlaying
       Just PlayerState{ rack } -> Right rack
   newRackTiles <- first YouDoNotHave (takeFrom tiles rackTiles)
-  newBoard <- applyMoveToBoard move board
+  nextBoard <- applyMoveToBoard move board
   let
-    (moveWords, moveScore) = scoreMove move board -- not newBoard
+    (moveWords, moveScore) = scoreMove move board -- not nextBoard
     newPlayers =
       Map.adjust
         (\pst@PlayerState{ score } ->
@@ -302,7 +301,7 @@ applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players
         username
         players
   return
-    ( fillRack username game{ board = newBoard, players = newPlayers }
+    ( fillRack username game{ board = nextBoard, players = newPlayers }
     , MoveReport{ moveMadeBy = username, moveWords, moveScore }
     )
 

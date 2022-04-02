@@ -35,7 +35,7 @@ init flags =
               , username = username
               , roomSpec =
                   case room of
-                    Nothing -> Model.MakeNewRoom
+                    Nothing -> Model.MakeNewRoom { noBoardMultipliers = False }
                     Just code -> Model.JoinRoom code
               }
           }

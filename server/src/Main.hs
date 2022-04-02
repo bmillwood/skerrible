@@ -33,9 +33,9 @@ data RoomState =
     , clients :: MVar (Map Username (Chan ToClient))
     }
 
-newRoomState :: RoomCode -> IO RoomState
-newRoomState roomCode = do
-  gameStore <- newMVar =<< createGame <$> Random.newStdGen
+newRoomState :: RoomCode -> RoomSettings -> IO RoomState
+newRoomState roomCode roomSettings = do
+  gameStore <- newMVar =<< createGame roomSettings <$> Random.newStdGen
   clients <- newMVar Map.empty
   return RoomState{ gameStore, roomCode, clients }
 
@@ -133,9 +133,9 @@ handleConnection (ServerState roomsVar) conn = do
                         return (rooms, loop)
                       Just room ->
                         return (rooms, joinedRoom room conn loginRequestName)
-                  MakeNewRoom -> do
+                  MakeNewRoom roomSettings -> do
                     code <- unusedRoomCode 4
-                    room <- newRoomState code
+                    room <- newRoomState code roomSettings
                     return
                       ( Map.insert code room rooms
                       , joinedRoom room conn loginRequestName
