@@ -384,6 +384,10 @@ viewChatting { folks, me, messageEntry, history } =
                   ]
                 ] |> List.concat
               )
+            Model.PlayerUndo { by } ->
+              ( by
+              , [ Html.text "undid the last move" ]
+              )
       in
       Html.tr
         []
@@ -454,6 +458,12 @@ view { error, state } =
                       , transientError = game.transientError
                       }
                   , viewScores game.scores
+                  , Html.div
+                      []
+                      [ Html.button
+                          [ Events.onClick Msg.SendUndo ]
+                          [ Html.text "Undo" ]
+                      ]
                   , Html.hr [ Attributes.style "clear" "both" ] []
                   , viewError game.moveError
                   , viewRack

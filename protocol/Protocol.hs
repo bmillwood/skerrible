@@ -140,12 +140,16 @@ data FromClient
   = LoginRequest { loginRequestName :: Username, roomSpec :: RoomSpec }
   | Chat { msgToSend :: Text }
   | MakeMove Move
+  | Undo
   deriving (Generic, Show)
 
 data TechErrorMsg
   = ProtocolError
   | TooLong { lengthUsed :: Integer, lengthLimit :: Integer }
   deriving (Generic, Show)
+
+instance Aeson.FromJSON TechErrorMsg
+instance Aeson.ToJSON TechErrorMsg
 
 checkTooLong :: Text -> Integer -> Maybe TechErrorMsg
 checkTooLong t lengthLimit
@@ -174,9 +178,6 @@ data MoveReport =
 instance Aeson.FromJSON MoveReport
 instance Aeson.ToJSON MoveReport
 
-instance Aeson.FromJSON TechErrorMsg
-instance Aeson.ToJSON TechErrorMsg
-
 data ToClient
   = TechnicalError TechErrorMsg
   | RoomDoesNotExist
@@ -188,6 +189,7 @@ data ToClient
   | UpdateBoard Board
   | UpdateRack Rack
   | MoveResult (Either MoveError ())
+  | Undone { undoneBy :: Username }
   deriving (Generic, Show)
 
 instance Aeson.FromJSON ToClient

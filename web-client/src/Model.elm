@@ -38,6 +38,7 @@ type Message
   | Left String
   | Chatted Chat
   | PlayerMoved MoveReport
+  | PlayerUndo { by : String }
 
 type RoomSpec
   = JoinRoom String

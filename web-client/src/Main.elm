@@ -93,6 +93,7 @@ update msg model =
         Ok (Msg.SendMessage _) -> failed "Can't send message before login!"
         Ok (Msg.ReceiveChatMessage _) -> failed "Unexpected message before login!"
         Ok (Msg.ReceiveMove _) -> failed "Unexpected move before login!"
+        Ok (Msg.ReceiveUndone _) -> failed "Unexpected undo before login!"
         Ok (Msg.UpdateRoomCode code) -> loggedIn code
         Ok (Msg.UpdateScores _) -> failed "Unexpected scores before login!"
         Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
@@ -103,6 +104,7 @@ update msg model =
           failed "Unexpected transient error before login!"
         Ok (Msg.ProposeMove _) -> failed "Can't propose move before login!"
         Ok Msg.SendMove -> failed "Can't send move before login!"
+        Ok Msg.SendUndo -> failed "Can't send undo before login!"
         Ok (Msg.MoveResult _) -> failed "Unexpected move result before login!"
         Ok Msg.ClearMoveError -> (model, Cmd.none)
         Ok (Msg.PreLogin loginMsg) ->
@@ -149,6 +151,10 @@ update msg model =
           ( setChat { chat | history = Model.PlayerMoved moveReport :: chat.history }
           , Cmd.none
           )
+        Ok (Msg.ReceiveUndone by) ->
+          ( setChat { chat | history = Model.PlayerUndo by :: chat.history }
+          , Cmd.none
+          )
         Ok (Msg.UpdateBoard newBoard) ->
           ( setGame { game | board = newBoard }, Cmd.none )
         Ok (Msg.UpdateTileData tileData) ->
@@ -184,6 +190,7 @@ update msg model =
           case game.proposedMove of
             Nothing -> ( model, Cmd.none )
             Just move -> ( model, Ports.sendMove move )
+        Ok Msg.SendUndo -> ( model, Ports.sendUndo )
         Ok (Msg.MoveResult (Err moveError)) ->
           ( setGame { game | moveError = Just moveError }, Cmd.none )
         Ok (Msg.MoveResult (Ok ())) ->

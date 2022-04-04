@@ -58,6 +58,11 @@ chat message =
   withTag "Chat" [("msgToSend", Json.Encode.string message)]
   |> send
 
+sendUndo : Cmd msg
+sendUndo =
+  withTag "Undo" []
+  |> send
+
 encodeDirection : Move.Direction -> Json.Encode.Value
 encodeDirection d =
   Json.Encode.string (
@@ -141,6 +146,7 @@ type ServerMsg
   | UpdateBoard Board.Board
   | UpdateRack Board.Rack
   | MoveResult (Result Move.Error ())
+  | Undone { by : String }
 
 type FromJS
   = ServerStatus ConnectionStatus
@@ -320,6 +326,10 @@ serverMsg =
         ]
     moveOk = Json.Decode.succeed ()
     moveResult = eitherResult moveError moveOk
+
+    undone =
+      Json.Decode.field "undoneBy" Json.Decode.string
+      |> Json.Decode.map (\by -> { by = by })
   in
   variant
     { name = "serverMsg" }
@@ -333,6 +343,7 @@ serverMsg =
     , ( "UpdateBoard", WithContents (Json.Decode.map UpdateBoard board) )
     , ( "UpdateRack", WithContents (Json.Decode.map UpdateRack rack) )
     , ( "MoveResult", WithContents (Json.Decode.map MoveResult moveResult) )
+    , ( "Undone", WithFieldsInline (Json.Decode.map Undone undone) )
     ]
 
 fromJS : Json.Decode.Decoder FromJS
@@ -358,6 +369,7 @@ toMsg msgFromJS =
     FromServer (UpdateBoard board) -> Ok (Msg.UpdateBoard board)
     FromServer (UpdateRack newRack) -> Ok (Msg.UpdateRack newRack)
     FromServer (MoveResult moveResult) -> Ok (Msg.MoveResult moveResult)
+    FromServer (Undone by) -> Ok (Msg.ReceiveUndone by)
 
 subscriptions : Model.Model -> Sub Msg
 subscriptions model =

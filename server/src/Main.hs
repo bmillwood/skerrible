@@ -7,6 +7,7 @@ module Main (main) where
 import Control.Concurrent.Async
 import Control.Concurrent
 import Control.Exception
+import Control.Lens (ifor_)
 import Control.Monad
 import qualified Data.Map as Map
 import Data.Function (fix)
@@ -28,7 +29,7 @@ import Protocol
 
 data RoomState =
   RoomState
-    { gameStore :: MVar GameState
+    { gameStore :: MVar Game
     , roomCode :: RoomCode
     , clients :: MVar (Map Username (Chan ToClient))
     }
@@ -152,12 +153,36 @@ handleConnection (ServerState roomsVar) conn = do
         sendToConn conn (TechnicalError ProtocolError)
         print ("unexpected message, dropping connection", other)
 
-updatePlayers :: (GameState -> GameState) -> RoomState -> IO ()
-updatePlayers up state@RoomState{ gameStore } = do
-  modifyMVar_ gameStore $ \game -> do
-    let updatedGame = up game
-    broadcast state (Scores (scores updatedGame))
-    return updatedGame
+data Undoable
+  = CanUndo
+  | CannotUndo
+
+modifyGame :: Undoable -> RoomState -> (GameState -> IO (GameState, a)) -> IO a
+modifyGame undoable RoomState{ gameStore } change = do
+  modifyMVar gameStore $ \game -> do
+    (nextState, result) <- change (latestState game)
+    let
+      apply = case undoable of
+        CanUndo -> addState
+        CannotUndo -> setLatestState
+    return (apply nextState game, result)
+
+applyUndo :: RoomState -> Username -> IO ()
+applyUndo roomState@RoomState{ gameStore } username = do
+  modifyMVar_ gameStore $ \game ->
+    case undo game of
+      Nothing -> do
+        return game
+      Just undone -> do
+        let latest@GameState{ board = uBoard, players = uPlayers } = latestState undone
+        ifor_ uPlayers $ \uName PlayerState{ rack } ->
+          sendToClient roomState uName (UpdateRack rack)
+        mapM_ (broadcast roomState)
+          [ Scores (scores latest)
+          , UpdateBoard uBoard
+          , Undone { undoneBy = username }
+          ]
+        return undone
 
 newtype IOAnd c a = IOAnd { runIOAnd :: IO (c, a) } deriving (Functor)
 
@@ -175,7 +200,10 @@ joinedRoom state@RoomState{ clients, roomCode } conn username = do
   toClientChan <- modifyMVar clients $ \clientMap -> do
     (chan, newClients) <- runIOAnd (Map.alterF addClient username clientMap)
     return (newClients, chan)
-  updatePlayers (addPlayerIfAbsent username) state
+  modifyGame CannotUndo state $ \gameState -> do
+    let withPlayer = addPlayerIfAbsent username gameState
+    broadcast state (Scores (scores withPlayer))
+    return (withPlayer, ())
   (readDoesNotReturn, neitherDoesWrite) <- concurrently
     (playerRead state conn username)
     (writeThread state toClientChan conn username)
@@ -198,8 +226,9 @@ playerRead roomState@RoomState{ roomCode } conn username = forever $ do
         Nothing ->
           broadcast roomState
             ChatMessage{ chatSentBy = username, chatContent = msgToSend }
+    Just Undo -> applyUndo roomState username
     Just (MakeMove move) ->
-      modifyMVar_ (gameStore roomState) $ \game ->
+      modifyGame CanUndo roomState $ \game ->
         case applyMove username move game of
           Right (nextGame@GameState{ board, players }, moveReport) -> do
             sendToClient roomState username (MoveResult (Right ()))
@@ -212,16 +241,19 @@ playerRead roomState@RoomState{ roomCode } conn username = forever $ do
               , Scores (scores nextGame)
               , UpdateBoard board
               ]
-            return nextGame
+            return (nextGame, ())
           Left moveError -> do
             sendToClient roomState username (MoveResult (Left moveError))
-            return game
+            return (game, ())
 
 writeThread :: RoomState -> Chan ToClient -> WS.Connection -> Username -> IO Void
 writeThread RoomState{ gameStore, roomCode } toClientChan conn username = do
-  withMVar gameStore $ \GameState{ board, players } -> do
-    writeChan toClientChan (UpdateBoard board)
-    writeChan toClientChan (UpdateTileData tileData)
+  withMVar gameStore $ \game -> do
+    let GameState{ board, players } = latestState game
+    mapM_ (writeChan toClientChan)
+      [ UpdateBoard board
+      , UpdateTileData tileData
+      ]
     case Map.lookup username players of
       Nothing -> print (roomCode, "sendRack: player missing", username)
       Just PlayerState{ rack } -> writeChan toClientChan (UpdateRack rack)

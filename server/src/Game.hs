@@ -198,14 +198,30 @@ data GameState =
     , rng :: Random.StdGen
     }
 
-createGame :: RoomSettings -> Random.StdGen -> GameState
+newtype Game = Game { gameHistory :: NonEmpty GameState }
+
+latestState :: Game -> GameState
+latestState Game{ gameHistory = x :| _ } = x
+
+addState :: GameState -> Game -> Game
+addState st Game{ gameHistory } = Game{ gameHistory = NonEmpty.cons st gameHistory }
+
+setLatestState :: GameState -> Game -> Game
+setLatestState x Game{ gameHistory = _ :| xs } = Game{ gameHistory = x :| xs }
+
+undo :: Game -> Maybe Game
+undo Game{ gameHistory = _ :| past } = Game <$> NonEmpty.nonEmpty past
+
+createGame :: RoomSettings -> Random.StdGen -> Game
 createGame settings rng =
-  GameState
-    { players = Map.empty
-    , board = newBoard settings
-    , bag = fmap tileCount tileData
-    , rng
-    }
+  Game
+  $ GameState
+      { players = Map.empty
+      , board = newBoard settings
+      , bag = fmap tileCount tileData
+      , rng
+      }
+    :| []
 
 scores :: GameState -> Map Username Integer
 scores GameState{ players } = Map.map score players

@@ -24,6 +24,7 @@ type OkMsg
   | SendMessage String
   | ReceiveChatMessage Model.Chat
   | ReceiveMove Model.MoveReport
+  | ReceiveUndone { by : String }
   | UpdateScores (Dict String Int)
   | UpdateBoard Board
   | UpdateTileData (DictTile Board.TileData)
@@ -31,6 +32,7 @@ type OkMsg
   | ShuffleRack (Maybe (List Int))
   | ProposeMove (Maybe Move)
   | SendMove
+  | SendUndo
   | MoveResult (Result Move.Error ())
   | ClearMoveError
   | SetTransientError (Maybe Model.TransientError)
