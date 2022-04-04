@@ -1,6 +1,8 @@
 {-# LANGUAGE NamedFieldPuns #-}
 import Data.Char
 import qualified Data.Map as Map
+import Data.String (fromString)
+import qualified System.Random as Random
 import Test.HUnit
 
 import Protocol
@@ -18,8 +20,11 @@ moveTiles = map (moveTile . tileOfChar)
     moveTile Nothing = UseBoard
     moveTile (Just t) = PlaceTile t
 
+normalSettings :: RoomSettings
+normalSettings = RoomSettings{ noBoardMultipliers = False }
+
 normalNewBoard :: Board
-normalNewBoard = newBoard RoomSettings{ noBoardMultipliers = False }
+normalNewBoard = newBoard normalSettings
 
 testBoard :: Pos -> [String] -> Board
 testBoard (Pos startRow startCol) rows =
@@ -32,6 +37,9 @@ testBoard (Pos startRow startCol) rows =
       Map.adjust (updateSquare letter) (Pos rowN colN) board
     updateSquare letter sq@Square{ squareTile } =
       sq{ squareTile = maybe squareTile Just (tileOfChar letter) }
+
+testGameState :: GameState
+testGameState = latestState $ createGame normalSettings (Random.mkStdGen 0)
 
 testMoveScore :: String -> Integer -> Move -> Board -> Test
 testMoveScore prefix expectedScore move@Move{ tiles } board =
@@ -66,6 +74,34 @@ moveScores moves = TestList finalTests
               Right _ -> return ()
               Left moveError -> assertFailure (show moveError)
 
+testGameEnd :: Test
+testGameEnd =
+  TestList
+    [ TestCase $ assertEqual "game not already ended" False (gameOver gameBeforeEnd)
+    , TestCase $ assertEqual "then game ended" (Just True) (gameOver <$> gameEnded)
+    , TestCase $ assertEqual "scores post-end"
+        [ ( u "ae", 3 )
+        , ( u "blank", 5 )
+        , ( u "q", -5 )
+        , ( u "winner", 17 )
+        ]
+        (maybe [] Map.toList (scores <$> gameEnded))
+    ]
+  where
+    u = Username . fromString
+    playersWithRacks = Map.map (\rack -> PlayerState{ score = 5, rack }) . Map.fromList
+    gameBeforeEnd =
+      testGameState
+        { players =
+            playersWithRacks
+              [ (u "q", Rack [ Letter 'Q' ])
+              , (u "ae", Rack [ Letter 'A', Letter 'E' ])
+              , (u "blank", Rack [ Blank ])
+              , (u "winner", Rack [])
+              ]
+        }
+    gameEnded = applyGameEnd gameBeforeEnd
+
 main :: IO ()
 main = runTestTTAndExit $ TestList
   [ "moveScores" ~: moveScores
@@ -87,4 +123,5 @@ main = runTestTTAndExit $ TestList
             , "R..E"
             , "M..G"
             ]
+  , "game end" ~: testGameEnd
   ]

@@ -194,6 +194,7 @@ data GameState =
   GameState
     { players :: Map Username PlayerState
     , board :: Board
+    , gameOver :: Bool
     , bag :: Map Tile Integer
     , rng :: Random.StdGen
     }
@@ -218,6 +219,7 @@ createGame settings rng =
   $ GameState
       { players = Map.empty
       , board = newBoard settings
+      , gameOver = False
       , bag = fmap tileCount tileData
       , rng
       }
@@ -295,7 +297,23 @@ takeFrom (x : xs) right =
         Right _ -> Left (x :| [])
     (before, _ : after) -> takeFrom xs (before ++ after)
 
+applyGameEnd :: GameState -> Maybe GameState
+applyGameEnd game@GameState{ players }
+  | any (\PlayerState{ rack = Rack tiles } -> null tiles) players =
+      Just game
+        { players = Map.map updateScoreFor players
+        , gameOver = True
+        }
+  | otherwise = Nothing
+  where
+    rackScore PlayerState{ rack = Rack tiles } = sum (map getTileScore tiles)
+    unplayedTileScore = sum (Map.map rackScore players)
+    updateScoreFor pst@PlayerState{ rack = Rack tiles, score }
+      | null tiles = pst{ score = score + unplayedTileScore }
+      | otherwise = pst{ score = score - rackScore pst }
+
 applyMove :: Username -> Move -> GameState -> Either MoveError (GameState, MoveReport)
+applyMove _ _ GameState{ gameOver = True } = Left GameIsOver
 applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players } = do
   tiles <-
     case [tile | PlaceTile tile <- moveTiles] of
@@ -303,7 +321,7 @@ applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players
       tiles -> Right tiles
   Rack rackTiles <-
     case Map.lookup username players of
-      Nothing -> Left NotPlaying
+      Nothing -> Left YouAreNotPlaying
       Just PlayerState{ rack } -> Right rack
   newRackTiles <- first YouDoNotHave (takeFrom tiles rackTiles)
   nextBoard <- applyMoveToBoard move board

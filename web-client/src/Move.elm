@@ -56,7 +56,8 @@ remainingRack move rack =
     move.tiles
 
 type Error
-  = NotPlaying
+  = YouAreNotPlaying
+  | GameIsOver
   | NotYourTurn
   | OffBoard
   | TilesDoNotMatchBoard

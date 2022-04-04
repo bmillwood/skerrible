@@ -241,7 +241,14 @@ playerRead roomState@RoomState{ roomCode } conn username = forever $ do
               , Scores (scores nextGame)
               , UpdateBoard board
               ]
-            return (nextGame, ())
+            case applyGameEnd nextGame of
+              Nothing -> return (nextGame, ())
+              Just endedGame -> do
+                mapM_ (broadcast roomState)
+                  [ Scores (scores endedGame)
+                  , GameOver
+                  ]
+                return (endedGame, ())
           Left moveError -> do
             sendToClient roomState username (MoveResult (Left moveError))
             return (game, ())

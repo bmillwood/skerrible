@@ -146,6 +146,7 @@ type ServerMsg
   | UpdateBoard Board.Board
   | UpdateRack Board.Rack
   | MoveResult (Result Move.Error ())
+  | GameOver
   | Undone { by : String }
 
 type FromJS
@@ -308,7 +309,8 @@ serverMsg =
     moveError =
       variant
         { name = "moveError" }
-        [ ( "NotPlaying", Plain Move.NotPlaying )
+        [ ( "YouAreNotPlaying", Plain Move.YouAreNotPlaying )
+        , ( "GameIsOver", Plain Move.GameIsOver )
         , ( "NotYourTurn", Plain Move.NotYourTurn )
         , ( "OffBoard", Plain Move.OffBoard )
         , ( "TilesDoNotMatchBoard", Plain Move.TilesDoNotMatchBoard )
@@ -343,6 +345,7 @@ serverMsg =
     , ( "UpdateBoard", WithContents (Json.Decode.map UpdateBoard board) )
     , ( "UpdateRack", WithContents (Json.Decode.map UpdateRack rack) )
     , ( "MoveResult", WithContents (Json.Decode.map MoveResult moveResult) )
+    , ( "GameOver", Plain GameOver )
     , ( "Undone", WithFieldsInline (Json.Decode.map Undone undone) )
     ]
 
@@ -369,6 +372,7 @@ toMsg msgFromJS =
     FromServer (UpdateBoard board) -> Ok (Msg.UpdateBoard board)
     FromServer (UpdateRack newRack) -> Ok (Msg.UpdateRack newRack)
     FromServer (MoveResult moveResult) -> Ok (Msg.MoveResult moveResult)
+    FromServer GameOver -> Ok Msg.DoNothing
     FromServer (Undone by) -> Ok (Msg.ReceiveUndone by)
 
 subscriptions : Model.Model -> Sub Msg

@@ -92,7 +92,8 @@ instance Aeson.FromJSON Move
 instance Aeson.ToJSON Move
 
 data MoveError
-  = NotPlaying
+  = YouAreNotPlaying
+  | GameIsOver
   | NotYourTurn
   | OffBoard
   | TilesDoNotMatchBoard
@@ -189,6 +190,7 @@ data ToClient
   | UpdateBoard Board
   | UpdateRack Rack
   | MoveResult (Either MoveError ())
+  | GameOver
   | Undone { undoneBy :: Username }
   deriving (Generic, Show)
 

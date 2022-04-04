@@ -288,7 +288,8 @@ viewError error =
     text =
       case error of
         Nothing -> ""
-        Just Move.NotPlaying -> "The game is not in progress"
+        Just Move.YouAreNotPlaying -> "The game is not in progress."
+        Just Move.GameIsOver -> "The game has already ended."
         Just Move.NotYourTurn -> "It's not your turn!"
         Just Move.OffBoard -> "Your move starts or ends off the edge of the board."
         Just Move.TilesDoNotMatchBoard -> "The tiles you provided don't match the ones on the board."
