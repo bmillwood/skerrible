@@ -331,6 +331,7 @@ viewRack { rack, tileData, rackError } =
           -- it seems like we need to compensate for padding and margin as well
           -- plus the "real" racks have a bit of extra space in them anyway
           Attributes.style "width" "17em"
+        , Attributes.style "min-height" "1.8em"
         ]
         [ Html.tr [] (List.map rackTile rack ++ [ spaceTd ]) ]
     , Html.button
