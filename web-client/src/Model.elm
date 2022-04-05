@@ -39,6 +39,7 @@ type Message
   | Chatted Chat
   | PlayerMoved MoveReport
   | PlayerUndo { by : String }
+  | GameOver
 
 type RoomSpec
   = JoinRoom String

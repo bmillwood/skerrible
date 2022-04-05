@@ -140,6 +140,10 @@ update msg model =
           ( setChat { chat | history = Model.PlayerUndo by :: chat.history }
           , Cmd.none
           )
+        Ok Msg.GameOver ->
+          ( setChat { chat | history = Model.GameOver :: chat.history }
+          , Cmd.none
+          )
         Ok (Msg.UpdateBoard newBoard) ->
           ( setGame { game | board = newBoard }, Cmd.none )
         Ok (Msg.UpdateTileData tileData) ->

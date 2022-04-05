@@ -34,6 +34,7 @@ type OkMsg
   | SendMove
   | SendUndo
   | MoveResult (Result Move.Error ())
+  | GameOver
   | ClearMoveError
   | SetTransientError (Maybe Model.TransientError)
 

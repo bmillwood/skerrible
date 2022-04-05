@@ -389,6 +389,10 @@ viewChatting { folks, me, messageEntry, history } =
               ( by
               , [ Html.text "undid the last move" ]
               )
+            Model.GameOver ->
+              ( ""
+              , [ Html.strong [] [ Html.text "The game has ended!" ] ]
+              )
       in
       Html.tr
         []

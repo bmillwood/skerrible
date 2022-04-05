@@ -338,7 +338,7 @@ serverMsg =
     , ( "UpdateBoard", WithContents updateBoard )
     , ( "UpdateRack", WithContents updateRack )
     , ( "MoveResult", WithContents moveResult )
-    , ( "GameOver", Plain (Ok Msg.DoNothing) )
+    , ( "GameOver", Plain (Ok Msg.GameOver) )
     , ( "Undone", WithFieldsInline undone )
     ]
 
