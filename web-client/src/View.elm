@@ -13,6 +13,31 @@ import Model
 import Move exposing (Move)
 import Msg exposing (Msg)
 
+radios
+  :  { name : String }
+  -> List { id : String, onChecked : a, contents : List (Html a) }
+  -> Html a
+radios { name } items =
+  let
+    radio { id, onChecked, contents } =
+      Html.li
+        []
+        [ Html.input
+            [ Attributes.type_ "radio"
+            , Attributes.id id
+            , Attributes.name name
+            , Events.onCheck (\_ -> onChecked)
+            ]
+            []
+        , Html.label
+            [ Attributes.for id ]
+            contents
+        ]
+  in
+  Html.ul
+    [ Attributes.style "list-style-type" "none" ]
+    (List.map radio items)
+
 viewPreLogin : Model.PreLoginState -> Html Msg.LoginFormMsg
 viewPreLogin { loginState, loginForm } =
   let
@@ -34,78 +59,71 @@ viewPreLogin { loginState, loginForm } =
         ]
         []
 
-    roomSpec =
-      let
-        updateSpec spec = Msg.Update { loginForm | roomSpec = spec }
-        joinRoomId = "joinRoom"
-        makeNewRoomId = "makeNewRoom"
-        radio id ifChecked contents =
-          Html.p
+    updateSpec spec = Msg.Update { loginForm | roomSpec = spec }
+    roomCodeInput =
+      case loginForm.roomSpec of
+        Model.JoinRoom code ->
+          Html.input
+            [ Attributes.type_ "text"
+            , Attributes.value code
+            , Events.onInput (\newCode -> updateSpec (Model.JoinRoom newCode))
+            ]
             []
-            [ Html.input
-                [ Attributes.type_ "radio"
-                , Attributes.id id
-                , Attributes.name "roomSpec"
-                , Events.onCheck (\_ -> updateSpec ifChecked)
-                ]
-                []
-            , Html.label
-                [ Attributes.for id ]
-                contents
+        Model.MakeNewRoom _ ->
+          Html.input
+            [ Attributes.type_ "text"
+            , Attributes.value ""
+            , Attributes.disabled True
             ]
-        roomCodeInput =
-          case loginForm.roomSpec of
-            Model.JoinRoom code ->
-              Html.input
-                [ Attributes.type_ "text"
-                , Attributes.value code
-                , Events.onInput (\newCode -> updateSpec (Model.JoinRoom newCode))
-                ]
-                []
-            Model.MakeNewRoom _ ->
-              Html.input
-                [ Attributes.type_ "text"
-                , Attributes.value ""
-                , Attributes.disabled True
-                ]
-                []
+            []
 
-        noBoardMultipliers =
-          let
-            id = "noBoardMultipliers"
-            (checked, disabled, newSpec) =
-              case loginForm.roomSpec of
-                Model.MakeNewRoom settings ->
-                  ( settings.noBoardMultipliers
-                  , False
-                  , (\b -> Model.MakeNewRoom { settings | noBoardMultipliers = b })
-                  )
-                Model.JoinRoom _ -> (False, True, always loginForm.roomSpec)
-          in
-          Html.p
-            [ Attributes.style "margin-left" "1em" ]
-            [ Html.input
-                [ Attributes.type_ "checkbox"
-                , Attributes.id id
-                , Attributes.checked checked
-                , Attributes.disabled disabled
-                , Events.onCheck (\newChecked -> updateSpec (newSpec newChecked))
-                ]
-                []
-            , Html.label
-                [ Attributes.for id ]
-                [ Html.text "Disable multiplier squares" ]
-            ]
+    noBoardMultipliers =
+      let
+        id = "noBoardMultipliers"
+        (checked, disabled, newSpec) =
+          case loginForm.roomSpec of
+            Model.MakeNewRoom settings ->
+              ( settings.noBoardMultipliers
+              , False
+              , (\b -> Model.MakeNewRoom { settings | noBoardMultipliers = b })
+              )
+            Model.JoinRoom _ -> (False, True, always loginForm.roomSpec)
       in
-      [ radio joinRoomId (Model.JoinRoom "")
-          [ Html.text "Join room: "
-          , roomCodeInput
-          ]
-      , radio makeNewRoomId (Model.MakeNewRoom { noBoardMultipliers = False })
-          [ Html.text "Make new room:"
-          , noBoardMultipliers
-          ]
-      ]
+      Html.li
+        []
+        [ Html.input
+            [ Attributes.type_ "checkbox"
+            , Attributes.id id
+            , Attributes.checked checked
+            , Attributes.disabled disabled
+            , Events.onCheck (\newChecked -> updateSpec (newSpec newChecked))
+            ]
+            []
+        , Html.label
+            [ Attributes.for id ]
+            [ Html.text "Disable multiplier squares" ]
+        ]
+
+    roomSpec =
+      radios
+        { name = "roomSpec" }
+        [ { id = "joinRoom"
+          , onChecked = updateSpec (Model.JoinRoom "")
+          , contents =
+              [ Html.text "Join room: "
+              , roomCodeInput
+              ]
+          }
+        , { id = "makeNewRoom"
+          , onChecked = updateSpec (Model.MakeNewRoom { noBoardMultipliers = False })
+          , contents =
+              [ Html.text "Make new room:"
+              , Html.ul
+                  []
+                  [ noBoardMultipliers ]
+              ]
+          }
+        ]
 
     submitButton =
       Html.input
@@ -119,7 +137,7 @@ viewPreLogin { loginState, loginForm } =
     [ Events.onSubmit Msg.Submit ]
     [ Html.p [] [ Html.text "Server: ", endpointInput ]
     , Html.p [] [ Html.text "Username: ", usernameInput ]
-    , Html.p [] roomSpec
+    , roomSpec
     , Html.p [] [ submitButton ]
     ]
 
