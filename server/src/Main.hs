@@ -31,25 +31,47 @@ data RoomState =
   RoomState
     { gameStore :: MVar Game
     , roomCode :: RoomCode
-    , clients :: MVar (Map Username (Chan ToClient))
+    , clients :: MVar (Map Username (Integer, Chan ToClient))
+    , setStale :: Bool -> IO ()
     }
 
-newRoomState :: RoomCode -> RoomSettings -> IO RoomState
-newRoomState roomCode roomSettings = do
+newRoomState :: RoomCode -> RoomSettings -> (Bool -> IO ()) -> IO RoomState
+newRoomState roomCode roomSettings setStale = do
   gameStore <- newMVar =<< createGame roomSettings <$> Random.newStdGen
   clients <- newMVar Map.empty
-  return RoomState{ gameStore, roomCode, clients }
+  return RoomState{ gameStore, roomCode, clients, setStale }
 
 data ServerState = ServerState (MVar (Map RoomCode RoomState))
 
 newServerState :: IO ServerState
 newServerState = ServerState <$> newMVar Map.empty
 
+staleSetter :: RoomCode -> ServerState -> IO (Bool -> IO ())
+staleSetter code (ServerState roomMapVar) = do
+  collectorStore <- newMVar Nothing
+  return $ \shouldCollect -> do
+    modifyMVar_ collectorStore $ \collector -> do
+      case collector of
+        Nothing -> return ()
+        Just c -> do
+          print (code, "cancelling cleanup")
+          cancel c
+      if shouldCollect
+        then do
+          print (code, "scheduling cleanup")
+          newCollector <- async $ do
+            threadDelay (3600 * 1000000)
+            print (code, "removing")
+            modifyMVar_ roomMapVar $ \roomMap ->
+              return (Map.delete code roomMap)
+          return (Just newCollector)
+        else return Nothing
+
 broadcast :: RoomState -> ToClient -> IO ()
 broadcast RoomState{ clients, roomCode } msg = do
   print (roomCode, "broadcast", msg)
   withMVar clients $ \clientMap ->
-    mapM_ (\chan -> writeChan chan msg) clientMap
+    mapM_ (\(_, chan) -> writeChan chan msg) clientMap
 
 warpSettings :: IO Warp.Settings
 warpSettings = do
@@ -98,7 +120,7 @@ sendToClient RoomState{ clients, roomCode } username msg =
   withMVar clients $ \clientsMap ->
     case Map.lookup username clientsMap of
       Nothing -> print (roomCode, "sendToClient: no client", username)
-      Just chan -> writeChan chan msg
+      Just (_, chan) -> writeChan chan msg
 
 readFromClient :: WS.Connection -> IO (Maybe FromClient)
 readFromClient conn = do
@@ -110,7 +132,7 @@ readFromClient conn = do
     Just msg -> return (Just msg)
 
 handleConnection :: ServerState -> WS.Connection -> IO ()
-handleConnection (ServerState roomsVar) conn = do
+handleConnection state@(ServerState roomsVar) conn = do
   print "handleConnection"
   fix $ \loop -> do
     msg <- readFromClient conn
@@ -136,7 +158,8 @@ handleConnection (ServerState roomsVar) conn = do
                         return (rooms, joinedRoom room conn loginRequestName)
                   MakeNewRoom roomSettings -> do
                     code <- unusedRoomCode 4
-                    room <- newRoomState code roomSettings
+                    setStale <- staleSetter code state
+                    room <- newRoomState code roomSettings setStale
                     return
                       ( Map.insert code room rooms
                       , joinedRoom room conn loginRequestName
@@ -148,7 +171,6 @@ handleConnection (ServerState roomsVar) conn = do
                       if Map.member code rooms
                         then unusedRoomCode (len + 1)
                         else return code
-
       Just other -> do
         sendToConn conn (TechnicalError ProtocolError)
         print ("unexpected message, dropping connection", other)
@@ -186,16 +208,23 @@ applyUndo roomState@RoomState{ gameStore } username = do
 
 newtype IOAnd c a = IOAnd { runIOAnd :: IO (c, a) } deriving (Functor)
 
-addClient :: Maybe (Chan ToClient) -> IOAnd (Chan ToClient) (Maybe (Chan ToClient))
+addClient :: Maybe (Integer, Chan ToClient) -> IOAnd (Chan ToClient) (Maybe (Integer, Chan ToClient))
 addClient Nothing = IOAnd $ do
   c <- newChan
-  return (c, Just c)
-addClient (Just c) = IOAnd $ do
+  return (c, Just (1, c))
+addClient (Just (n, c)) = IOAnd $ do
   newC <- dupChan c
-  return (newC, Just c)
+  return (newC, Just (n + 1, c))
+
+removeClient :: Maybe (Integer, Chan ToClient) -> Maybe (Integer, Chan ToClient)
+removeClient Nothing = Nothing
+removeClient (Just (n, c))
+  | n <= 1 = Nothing
+  | otherwise = Just (n - 1, c)
 
 joinedRoom :: RoomState -> WS.Connection -> Username -> IO ()
-joinedRoom state@RoomState{ clients, roomCode } conn username = do
+joinedRoom state@RoomState{ clients, roomCode, setStale } conn username = do
+  setStale False
   sendToConn conn (UpdateRoomCode roomCode)
   toClientChan <- modifyMVar clients $ \clientMap -> do
     (chan, newClients) <- runIOAnd (Map.alterF addClient username clientMap)
@@ -208,7 +237,11 @@ joinedRoom state@RoomState{ clients, roomCode } conn username = do
     (playerRead state conn username)
     (writeThread state toClientChan conn username)
     `onException` do
-      print (roomCode, "disconnected", username)
+      modifyMVar_ clients $ \clientMap -> do
+        print (roomCode, "disconnected", username)
+        let newMap = Map.alter removeClient username clientMap
+        when (Map.null newMap) (setStale True)
+        return newMap
   () <- absurd readDoesNotReturn
   absurd neitherDoesWrite
 
