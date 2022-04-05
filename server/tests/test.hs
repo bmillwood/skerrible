@@ -21,7 +21,11 @@ moveTiles = map (moveTile . tileOfChar)
     moveTile (Just t) = PlaceTile t
 
 normalSettings :: RoomSettings
-normalSettings = RoomSettings{ noBoardMultipliers = False }
+normalSettings =
+  RoomSettings
+    { noBoardMultipliers = False
+    , turnEnforcement = NoEnforcement
+    }
 
 normalNewBoard :: Board
 normalNewBoard = newBoard normalSettings
