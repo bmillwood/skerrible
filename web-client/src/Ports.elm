@@ -135,24 +135,6 @@ variant { name } values =
          Just (WithFieldsInline decoder) -> decoder
          Just (WithContents decoder) -> Json.Decode.field "contents" decoder)
 
-type ServerMsg
-  = TechnicalError String
-  | RoomDoesNotExist
-  | UpdateRoomCode String
-  | Scores (Dict String Int)
-  | ChatMessage Model.Chat
-  | PlayerMoved Model.MoveReport
-  | UpdateTileData (DictTile Board.TileData)
-  | UpdateBoard Board.Board
-  | UpdateRack Board.Rack
-  | MoveResult (Result Move.Error ())
-  | GameOver
-  | Undone { by : String }
-
-type FromJS
-  = ServerStatus ConnectionStatus
-  | FromServer ServerMsg
-
 connectionStatus : Json.Decode.Decoder ConnectionStatus
 connectionStatus =
   plainVariant
@@ -168,9 +150,6 @@ decodeTile =
     [ ("Blank", Plain Board.Blank)
     , ("Letter", WithContents (Json.Decode.map Board.Letter Key.decodeChar))
     ]
-
-rack : Json.Decode.Decoder Board.Rack
-rack = Json.Decode.list decodeTile
 
 square : Json.Decode.Decoder Board.Square
 square =
@@ -233,7 +212,7 @@ listOfPairs decodeA decodeB =
       (Json.Decode.index 1 decodeB)
   )
 
-serverMsg : Json.Decode.Decoder ServerMsg
+serverMsg : Json.Decode.Decoder Msg
 serverMsg =
   let
     tooLong =
@@ -249,19 +228,22 @@ serverMsg =
         [ ( "ProtocolError", Plain "Unspecified protocol error :(" )
         , ( "TooLong", WithFieldsInline tooLong )
         ]
+    techError = Json.Decode.map (Err << Msg.ClientError) techErrorMsg
 
-    roomCode = Json.Decode.string
+    roomDoesNotExist = Ok (Msg.PreLogin (Msg.Failed "Room does not exist"))
+
+    updateRoomCode = Json.Decode.map (Ok << Msg.UpdateRoomCode) Json.Decode.string
 
     scores =
-      Json.Decode.map
-        Dict.fromList
-        (listOfPairs Json.Decode.string Json.Decode.int)
+      listOfPairs Json.Decode.string Json.Decode.int
+      |> Json.Decode.map (Ok << Msg.UpdateScores << Dict.fromList)
 
     message =
       Json.Decode.map2
         Model.Chat
         (Json.Decode.field "chatSentBy" Json.Decode.string)
         (Json.Decode.field "chatContent" Json.Decode.string)
+      |> Json.Decode.map (Ok << Msg.ReceiveChatMessage)
 
     playerMoved =
       Json.Decode.map3
@@ -269,13 +251,16 @@ serverMsg =
         (Json.Decode.field "moveMadeBy" Json.Decode.string)
         (Json.Decode.field "moveWords" (Json.Decode.list Json.Decode.string))
         (Json.Decode.field "moveScore" Json.Decode.int)
+      |> Json.Decode.map (Ok << Msg.ReceiveMove)
 
     tileData =
       Json.Decode.map2
         Board.TileData
         (Json.Decode.field "tileScore" Json.Decode.int)
         (Json.Decode.field "tileCount" Json.Decode.int)
-    tileDataMap = Json.Decode.map DictTile.fromList (listOfPairs decodeTile tileData)
+    updateTileData =
+      listOfPairs decodeTile tileData
+      |> Json.Decode.map (Ok << Msg.UpdateTileData << DictTile.fromList)
 
     posSquare =
       Json.Decode.map3
@@ -304,7 +289,13 @@ serverMsg =
                   |> Maybe.withDefault Board.emptySquare))
           in
           { top = top, left = left, squares = squares }
-    board = Json.Decode.map ofPosSquares (Json.Decode.list posSquare)
+    updateBoard =
+      Json.Decode.list posSquare
+      |> Json.Decode.map (Ok << Msg.UpdateBoard << ofPosSquares)
+
+    updateRack =
+      Json.Decode.list decodeTile
+      |> Json.Decode.map (Ok << Msg.UpdateRack)
 
     moveError =
       variant
@@ -327,57 +318,47 @@ serverMsg =
           )
         ]
     moveOk = Json.Decode.succeed ()
-    moveResult = eitherResult moveError moveOk
+    moveResult =
+      eitherResult moveError moveOk
+      |> Json.Decode.map (Ok << Msg.MoveResult)
 
     undone =
       Json.Decode.field "undoneBy" Json.Decode.string
-      |> Json.Decode.map (\by -> { by = by })
+      |> Json.Decode.map (\by -> Ok (Msg.ReceiveUndone { by = by }))
   in
   variant
     { name = "serverMsg" }
-    [ ( "TechnicalError", WithContents (Json.Decode.map TechnicalError techErrorMsg) )
-    , ( "RoomDoesNotExist", Plain RoomDoesNotExist )
-    , ( "UpdateRoomCode", WithContents (Json.Decode.map UpdateRoomCode roomCode) )
-    , ( "Scores", WithContents (Json.Decode.map Scores scores) )
-    , ( "ChatMessage", WithFieldsInline (Json.Decode.map ChatMessage message) )
-    , ( "PlayerMoved", WithContents (Json.Decode.map PlayerMoved playerMoved) )
-    , ( "UpdateTileData", WithContents (Json.Decode.map UpdateTileData tileDataMap) )
-    , ( "UpdateBoard", WithContents (Json.Decode.map UpdateBoard board) )
-    , ( "UpdateRack", WithContents (Json.Decode.map UpdateRack rack) )
-    , ( "MoveResult", WithContents (Json.Decode.map MoveResult moveResult) )
-    , ( "GameOver", Plain GameOver )
-    , ( "Undone", WithFieldsInline (Json.Decode.map Undone undone) )
+    [ ( "TechnicalError" , WithContents techError )
+    , ( "RoomDoesNotExist", Plain roomDoesNotExist )
+    , ( "UpdateRoomCode", WithContents updateRoomCode )
+    , ( "Scores", WithContents scores )
+    , ( "ChatMessage", WithFieldsInline message )
+    , ( "PlayerMoved", WithContents playerMoved )
+    , ( "UpdateTileData", WithContents updateTileData )
+    , ( "UpdateBoard", WithContents updateBoard )
+    , ( "UpdateRack", WithContents updateRack )
+    , ( "MoveResult", WithContents moveResult )
+    , ( "GameOver", Plain (Ok Msg.DoNothing) )
+    , ( "Undone", WithFieldsInline undone )
     ]
 
-fromJS : Json.Decode.Decoder FromJS
+fromJS : Json.Decode.Decoder Msg
 fromJS =
+  let
+    ofConnStatus status =
+      case status of
+        Connected -> Ok (Msg.PreLogin Msg.Connected)
+        Disconnected -> Err Msg.ServerDisconnected
+  in
   variant
     { name = "fromJS" }
-    [ ("server-status", WithContents (Json.Decode.map ServerStatus connectionStatus))
-    , ("from-server", WithContents (Json.Decode.map FromServer serverMsg))
+    [ ("server-status", WithContents (Json.Decode.map ofConnStatus connectionStatus))
+    , ("from-server", WithContents serverMsg)
     ]
-
-toMsg : FromJS -> Msg
-toMsg msgFromJS =
-  case msgFromJS of
-    ServerStatus Connected -> Ok (Msg.PreLogin Msg.Connected)
-    ServerStatus Disconnected -> Err Msg.ServerDisconnected
-    FromServer (TechnicalError techErrorMsg) -> Err (Msg.ClientError techErrorMsg)
-    FromServer RoomDoesNotExist -> Ok (Msg.PreLogin (Msg.Failed "Room does not exist"))
-    FromServer (UpdateRoomCode code) -> Ok (Msg.UpdateRoomCode code)
-    FromServer (Scores scores) -> Ok (Msg.UpdateScores scores)
-    FromServer (ChatMessage chatMsg) -> Ok (Msg.ReceiveChatMessage chatMsg)
-    FromServer (PlayerMoved moveReport) -> Ok (Msg.ReceiveMove moveReport)
-    FromServer (UpdateTileData tileData) -> Ok (Msg.UpdateTileData tileData)
-    FromServer (UpdateBoard board) -> Ok (Msg.UpdateBoard board)
-    FromServer (UpdateRack newRack) -> Ok (Msg.UpdateRack newRack)
-    FromServer (MoveResult moveResult) -> Ok (Msg.MoveResult moveResult)
-    FromServer GameOver -> Ok Msg.DoNothing
-    FromServer (Undone by) -> Ok (Msg.ReceiveUndone by)
 
 subscriptions : Model.Model -> Sub Msg
 subscriptions model =
   receiveFromJS <| \value ->
-    case Json.Decode.decodeValue (Json.Decode.map toMsg fromJS) value of
+    case Json.Decode.decodeValue fromJS value of
       Ok msg -> msg
       Err error -> Err (Msg.DriverProtocolError (Json.Decode.errorToString error))
