@@ -40,7 +40,7 @@ init flags =
               , roomCode = Maybe.withDefault "" room
               , roomSettings =
                   { noBoardMultipliers = False
-                  , turnEnforcement = Model.NoEnforcement
+                  , turnEnforcement = Model.LetPlayersChoose
                   }
               }
           }
