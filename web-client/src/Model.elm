@@ -41,14 +41,19 @@ type Message
   | PlayerUndo { by : String }
   | GameOver
 
-type RoomSpec
-  = JoinRoom String
-  | MakeNewRoom { noBoardMultipliers : Bool }
+type RoomAction
+  = JoinRoom
+  | MakeNewRoom
+
+type alias RoomSettings =
+  { noBoardMultipliers : Bool }
 
 type alias LoginForm =
   { endpoint : String
   , username : String
-  , roomSpec : RoomSpec
+  , roomAction : RoomAction
+  , roomCode : String
+  , roomSettings : RoomSettings
   }
 
 type LoginState

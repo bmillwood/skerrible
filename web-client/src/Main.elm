@@ -33,10 +33,13 @@ init flags =
           , loginForm =
               { endpoint = endpoint
               , username = username
-              , roomSpec =
+              , roomAction =
                   case room of
-                    Nothing -> Model.MakeNewRoom { noBoardMultipliers = False }
-                    Just code -> Model.JoinRoom code
+                    Nothing -> Model.MakeNewRoom
+                    Just _ -> Model.JoinRoom
+              , roomCode = Maybe.withDefault "" room
+              , roomSettings =
+                  { noBoardMultipliers = False }
               }
           }
     }
@@ -101,10 +104,7 @@ update msg model =
               )
             Msg.Connected ->
               ( model
-              , Ports.login
-                  { username = preLogin.loginForm.username
-                  , roomSpec = preLogin.loginForm.roomSpec
-                  }
+              , Ports.login preLogin.loginForm
               )
             Msg.Failed error ->
               failed error

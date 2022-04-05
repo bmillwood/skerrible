@@ -15,17 +15,18 @@ import Msg exposing (Msg)
 
 radios
   :  { name : String }
-  -> List { id : String, onChecked : a, contents : List (Html a) }
+  -> List { id : String, checked : Bool, onChecked : a, contents : List (Html a) }
   -> Html a
 radios { name } items =
   let
-    radio { id, onChecked, contents } =
+    radio { id, checked, onChecked, contents } =
       Html.li
         []
         [ Html.input
             [ Attributes.type_ "radio"
             , Attributes.id id
             , Attributes.name name
+            , Attributes.checked checked
             , Events.onCheck (\_ -> onChecked)
             ]
             []
@@ -59,44 +60,35 @@ viewPreLogin { loginState, loginForm } =
         ]
         []
 
-    updateSpec spec = Msg.Update { loginForm | roomSpec = spec }
     roomCodeInput =
-      case loginForm.roomSpec of
-        Model.JoinRoom code ->
-          Html.input
-            [ Attributes.type_ "text"
-            , Attributes.value code
-            , Events.onInput (\newCode -> updateSpec (Model.JoinRoom newCode))
-            ]
-            []
-        Model.MakeNewRoom _ ->
-          Html.input
-            [ Attributes.type_ "text"
-            , Attributes.value ""
-            , Attributes.disabled True
-            ]
-            []
+      Html.input
+        [ Attributes.type_ "text"
+        , Attributes.value loginForm.roomCode
+        , Attributes.disabled (loginForm.roomAction /= Model.JoinRoom)
+        , Events.onInput (\newCode -> Msg.Update { loginForm | roomCode = newCode })
+        ]
+        []
 
     noBoardMultipliers =
       let
         id = "noBoardMultipliers"
-        (checked, disabled, newSpec) =
-          case loginForm.roomSpec of
-            Model.MakeNewRoom settings ->
-              ( settings.noBoardMultipliers
-              , False
-              , (\b -> Model.MakeNewRoom { settings | noBoardMultipliers = b })
-              )
-            Model.JoinRoom _ -> (False, True, always loginForm.roomSpec)
       in
       Html.li
         []
         [ Html.input
             [ Attributes.type_ "checkbox"
             , Attributes.id id
-            , Attributes.checked checked
-            , Attributes.disabled disabled
-            , Events.onCheck (\newChecked -> updateSpec (newSpec newChecked))
+            , Attributes.checked loginForm.roomSettings.noBoardMultipliers
+            , Attributes.disabled (loginForm.roomAction /= Model.MakeNewRoom)
+            , Events.onCheck (\newChecked ->
+                  let
+                    oldSettings = loginForm.roomSettings
+                  in
+                  Msg.Update
+                    { loginForm
+                    | roomSettings = { oldSettings | noBoardMultipliers = newChecked }
+                    }
+                )
             ]
             []
         , Html.label
@@ -108,14 +100,16 @@ viewPreLogin { loginState, loginForm } =
       radios
         { name = "roomSpec" }
         [ { id = "joinRoom"
-          , onChecked = updateSpec (Model.JoinRoom "")
+          , checked = loginForm.roomAction == Model.JoinRoom
+          , onChecked = Msg.Update { loginForm | roomAction = Model.JoinRoom }
           , contents =
               [ Html.text "Join room: "
               , roomCodeInput
               ]
           }
         , { id = "makeNewRoom"
-          , onChecked = updateSpec (Model.MakeNewRoom { noBoardMultipliers = False })
+          , checked = loginForm.roomAction == Model.MakeNewRoom
+          , onChecked = Msg.Update { loginForm | roomAction = Model.MakeNewRoom }
           , contents =
               [ Html.text "Make new room:"
               , Html.ul

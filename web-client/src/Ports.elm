@@ -34,23 +34,27 @@ withTag : String -> List (String, Json.Encode.Value) -> Json.Encode.Value
 withTag tag fields =
   Json.Encode.object (("tag", Json.Encode.string tag) :: fields)
 
-encodeRoomSpec : Model.RoomSpec -> Json.Encode.Value
-encodeRoomSpec spec =
-  case spec of
-    Model.JoinRoom room -> withTag "JoinRoom" [("contents", Json.Encode.string room)]
-    Model.MakeNewRoom { noBoardMultipliers } ->
-      withTag "MakeNewRoom"
-        [ ( "contents"
-          , Json.Encode.object
-              [ ( "noBoardMultipliers", Json.Encode.bool noBoardMultipliers ) ]
-          )
-        ]
-
-login : { username : String, roomSpec : Model.RoomSpec } -> Cmd msg
-login { username, roomSpec } =
+login : Model.LoginForm -> Cmd msg
+login { username, roomAction, roomCode, roomSettings } =
+  let
+    roomSpec =
+      case roomAction of
+        Model.JoinRoom ->
+          withTag "JoinRoom" [("contents", Json.Encode.string roomCode)]
+        Model.MakeNewRoom ->
+          let
+            { noBoardMultipliers } = roomSettings
+          in
+          withTag "MakeNewRoom"
+            [ ( "contents"
+              , Json.Encode.object
+                  [ ( "noBoardMultipliers", Json.Encode.bool noBoardMultipliers ) ]
+              )
+            ]
+  in
   withTag "LoginRequest"
   [ ( "loginRequestName", Json.Encode.string username )
-  , ( "roomSpec", encodeRoomSpec roomSpec )
+  , ( "roomSpec", roomSpec )
   ] |> send
 
 chat : String -> Cmd msg
