@@ -157,6 +157,7 @@ data FromClient
 
 data TechErrorMsg
   = ProtocolError
+  | MustNotBeEmpty
   | TooLong { lengthUsed :: Integer, lengthLimit :: Integer }
   deriving (Generic, Show)
 
@@ -165,6 +166,7 @@ instance Aeson.ToJSON TechErrorMsg
 
 checkTooLong :: Text -> Integer -> Maybe TechErrorMsg
 checkTooLong t lengthLimit
+  | lengthUsed == 0 = Just MustNotBeEmpty
   | lengthUsed > lengthLimit = Just TooLong{ lengthUsed, lengthLimit }
   | otherwise = Nothing
   where

@@ -233,13 +233,13 @@ serverMsg =
           ++ " exceeds limit " ++ String.fromInt limit)
         (Json.Decode.field "lengthUsed" Json.Decode.int)
         (Json.Decode.field "lengthLimit" Json.Decode.int)
-    techErrorMsg =
+    techError =
       variant
         { name = "TechErrorMsg" }
-        [ ( "ProtocolError", Plain "Unspecified protocol error :(" )
-        , ( "TooLong", WithFieldsInline tooLong )
+        [ ( "ProtocolError", Plain (Err (Msg.ClientError "Unspecified protocol error :(")) )
+        , ( "MustNotBeEmpty", Plain (Err (Msg.ClientError "Must not be empty")) )
+        , ( "TooLong", WithFieldsInline (Json.Decode.map (Err << Msg.ClientError) tooLong) )
         ]
-    techError = Json.Decode.map (Err << Msg.ClientError) techErrorMsg
 
     roomDoesNotExist = Ok (Msg.PreLogin (Msg.Failed "Room does not exist"))
 
