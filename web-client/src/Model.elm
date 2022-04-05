@@ -45,8 +45,14 @@ type RoomAction
   = JoinRoom
   | MakeNewRoom
 
+type TurnEnforcement
+  = NoEnforcement
+  | LetPlayersChoose
+
 type alias RoomSettings =
-  { noBoardMultipliers : Bool }
+  { noBoardMultipliers : Bool
+  , turnEnforcement : TurnEnforcement
+  }
 
 type alias LoginForm =
   { endpoint : String

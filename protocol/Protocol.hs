@@ -122,8 +122,19 @@ newtype RoomCode = RoomCode Text
 instance Aeson.FromJSON RoomCode
 instance Aeson.ToJSON RoomCode
 
-data RoomSettings = RoomSettings
-  { noBoardMultipliers :: Bool }
+data TurnEnforcement
+  = NoEnforcement
+  | LetPlayersChoose
+  deriving (Generic, Show)
+
+instance Aeson.FromJSON TurnEnforcement
+instance Aeson.ToJSON TurnEnforcement
+
+data RoomSettings =
+  RoomSettings
+    { noBoardMultipliers :: Bool
+    , turnEnforcement :: TurnEnforcement
+    }
   deriving (Generic, Show)
 
 instance Aeson.FromJSON RoomSettings

@@ -13,11 +13,18 @@ import Model
 import Move exposing (Move)
 import Msg exposing (Msg)
 
+type alias Radio a =
+  { id : String
+  , checked : Bool
+  , onChecked : a
+  , contents : List (Html a)
+  }
+
 radios
-  :  { name : String }
-  -> List { id : String, checked : Bool, onChecked : a, contents : List (Html a) }
+  :  { name : String, disabled : Bool }
+  -> List (Radio a)
   -> Html a
-radios { name } items =
+radios { name, disabled } items =
   let
     radio { id, checked, onChecked, contents } =
       Html.li
@@ -27,6 +34,7 @@ radios { name } items =
             , Attributes.id id
             , Attributes.name name
             , Attributes.checked checked
+            , Attributes.disabled disabled
             , Events.onCheck (\_ -> onChecked)
             ]
             []
@@ -42,10 +50,12 @@ radios { name } items =
 viewPreLogin : Model.PreLoginState -> Html Msg.LoginFormMsg
 viewPreLogin { loginState, loginForm } =
   let
+    { endpoint, username, roomCode, roomAction, roomSettings } = loginForm
+
     endpointInput =
       Html.input
         [ Attributes.type_ "text"
-        , Attributes.value loginForm.endpoint
+        , Attributes.value endpoint
         , Events.onInput (\input -> Msg.Update { loginForm | endpoint = input })
         , Attributes.disabled (loginState == Model.Waiting)
         ]
@@ -54,7 +64,7 @@ viewPreLogin { loginState, loginForm } =
     usernameInput =
       Html.input
         [ Attributes.type_ "text"
-        , Attributes.value loginForm.username
+        , Attributes.value username
         , Events.onInput (\input -> Msg.Update { loginForm | username = input })
         , Attributes.disabled (loginState == Model.Waiting)
         ]
@@ -63,8 +73,8 @@ viewPreLogin { loginState, loginForm } =
     roomCodeInput =
       Html.input
         [ Attributes.type_ "text"
-        , Attributes.value loginForm.roomCode
-        , Attributes.disabled (loginForm.roomAction /= Model.JoinRoom)
+        , Attributes.value roomCode
+        , Attributes.disabled (roomAction /= Model.JoinRoom)
         , Events.onInput (\newCode -> Msg.Update { loginForm | roomCode = newCode })
         ]
         []
@@ -78,16 +88,10 @@ viewPreLogin { loginState, loginForm } =
         [ Html.input
             [ Attributes.type_ "checkbox"
             , Attributes.id id
-            , Attributes.checked loginForm.roomSettings.noBoardMultipliers
-            , Attributes.disabled (loginForm.roomAction /= Model.MakeNewRoom)
+            , Attributes.checked roomSettings.noBoardMultipliers
+            , Attributes.disabled (roomAction /= Model.MakeNewRoom)
             , Events.onCheck (\newChecked ->
-                  let
-                    oldSettings = loginForm.roomSettings
-                  in
-                  Msg.Update
-                    { loginForm
-                    | roomSettings = { oldSettings | noBoardMultipliers = newChecked }
-                    }
+                  { roomSettings | noBoardMultipliers = newChecked }
                 )
             ]
             []
@@ -96,11 +100,32 @@ viewPreLogin { loginState, loginForm } =
             [ Html.text "Disable multiplier squares" ]
         ]
 
+    turnEnforcement =
+      Html.li
+        []
+        [ Html.text "Turn order enforcement:"
+        , radios
+          { name = "turnEnforcement"
+          , disabled = roomAction == Model.JoinRoom
+          }
+          [ { id = "none"
+            , checked = roomSettings.turnEnforcement == Model.NoEnforcement
+            , onChecked = { roomSettings | turnEnforcement = Model.NoEnforcement }
+            , contents = [ Html.text "None (anyone can move at any time)" ]
+            }
+          , { id = "letPlayersChoose"
+            , checked = roomSettings.turnEnforcement == Model.LetPlayersChoose
+            , onChecked = { roomSettings | turnEnforcement = Model.LetPlayersChoose }
+            , contents = [ Html.text "Enforce the order players first play in" ]
+            }
+          ]
+        ]
+
     roomSpec =
       radios
-        { name = "roomSpec" }
+        { name = "roomSpec", disabled = False }
         [ { id = "joinRoom"
-          , checked = loginForm.roomAction == Model.JoinRoom
+          , checked = roomAction == Model.JoinRoom
           , onChecked = Msg.Update { loginForm | roomAction = Model.JoinRoom }
           , contents =
               [ Html.text "Join room: "
@@ -108,13 +133,18 @@ viewPreLogin { loginState, loginForm } =
               ]
           }
         , { id = "makeNewRoom"
-          , checked = loginForm.roomAction == Model.MakeNewRoom
+          , checked = roomAction == Model.MakeNewRoom
           , onChecked = Msg.Update { loginForm | roomAction = Model.MakeNewRoom }
           , contents =
               [ Html.text "Make new room:"
               , Html.ul
                   []
-                  [ noBoardMultipliers ]
+                  [ noBoardMultipliers
+                  , turnEnforcement
+                  ]
+                |> Html.map (\settings ->
+                      Msg.Update { loginForm | roomSettings = settings }
+                    )
               ]
           }
         ]

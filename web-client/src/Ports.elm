@@ -43,12 +43,19 @@ login { username, roomAction, roomCode, roomSettings } =
           withTag "JoinRoom" [("contents", Json.Encode.string roomCode)]
         Model.MakeNewRoom ->
           let
-            { noBoardMultipliers } = roomSettings
+            { noBoardMultipliers, turnEnforcement } = roomSettings
+            encodedTurnEnforcement =
+              Json.Encode.string
+              <| case turnEnforcement of
+                Model.NoEnforcement -> "NoEnforcement"
+                Model.LetPlayersChoose -> "LetPlayersChoose"
           in
           withTag "MakeNewRoom"
             [ ( "contents"
               , Json.Encode.object
-                  [ ( "noBoardMultipliers", Json.Encode.bool noBoardMultipliers ) ]
+                  [ ( "noBoardMultipliers", Json.Encode.bool noBoardMultipliers )
+                  , ( "turnEnforcement", encodedTurnEnforcement )
+                  ]
               )
             ]
   in

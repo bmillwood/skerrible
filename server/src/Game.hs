@@ -7,6 +7,8 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map as Map
 import Data.Map (Map)
+import qualified Data.Set as Set
+import Data.Set (Set)
 import Data.Maybe (isJust, isNothing)
 import qualified System.Random as Random
 
@@ -190,9 +192,18 @@ data PlayerState =
     , score :: Integer
     }
 
+data TurnState
+  = NoTurns
+  | Turns
+      { prevMover :: Maybe Username
+      , mustFollow :: Map Username Username
+      , notMovedYet :: Set Username
+      }
+
 data GameState =
   GameState
     { players :: Map Username PlayerState
+    , turns :: TurnState
     , board :: Board
     , gameOver :: Bool
     , bag :: Map Tile Integer
@@ -214,16 +225,27 @@ undo :: Game -> Maybe Game
 undo Game{ gameHistory = _ :| past } = Game <$> NonEmpty.nonEmpty past
 
 createGame :: RoomSettings -> Random.StdGen -> Game
-createGame settings rng =
+createGame settings@RoomSettings{ turnEnforcement } rng =
   Game
   $ GameState
       { players = Map.empty
+      , turns =
+          case turnEnforcement of
+            NoEnforcement ->
+              NoTurns
+            LetPlayersChoose ->
+              Turns
+                { prevMover = Nothing
+                , mustFollow = Map.empty
+                , notMovedYet = Set.empty
+                }
       , board = newBoard settings
       , gameOver = False
       , bag = fmap tileCount tileData
       , rng
       }
     :| []
+  where
 
 scores :: GameState -> Map Username Integer
 scores GameState{ players } = Map.map score players
@@ -281,10 +303,18 @@ fillRack =
     (\game -> maybe (game, Nothing) (fmap Just . fillPlayerRack game))
 
 addPlayerIfAbsent :: Username -> GameState -> GameState
-addPlayerIfAbsent = updatePlayer add
+addPlayerIfAbsent username = updatePlayer add username
   where
     add game Nothing =
-      fmap Just (fillPlayerRack game PlayerState{ rack = Rack [], score = 0 })
+      ( case turns of
+          NoTurns -> nextGame
+          Turns{ notMovedYet } ->
+            nextGame{ turns = turns{ notMovedYet = Set.insert username notMovedYet } }
+      , Just p
+      )
+      where
+        (nextGame@GameState{ turns }, p)
+          = fillPlayerRack game PlayerState{ rack = Rack [], score = 0 }
     add game (Just p) = (game, Just p)
 
 takeFrom :: (Eq a) => [a] -> [a] -> Either (NonEmpty a) [a]
@@ -314,7 +344,31 @@ applyGameEnd game@GameState{ players }
 
 applyMove :: Username -> Move -> GameState -> Either MoveError (GameState, MoveReport)
 applyMove _ _ GameState{ gameOver = True } = Left GameIsOver
-applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players } = do
+applyMove
+  username
+  move@Move{ tiles = moveTiles }
+  game@GameState{ board, turns, players }
+  = do
+  nextTurns <-
+    case turns of
+      NoTurns -> Right NoTurns
+      Turns{ prevMover, mustFollow, notMovedYet } ->
+        case (prevMover, Map.lookup username mustFollow) of
+          (Nothing, _) -> ok mustFollow
+          (Just actual, Just expected)
+            | expected /= actual -> Left NotYourTurn
+            | otherwise -> ok mustFollow
+          (Just prev, Nothing)
+            | Set.member username notMovedYet || Set.null notMovedYet ->
+                ok $ Map.insert username prev mustFollow
+            | otherwise -> Left NotYourTurn
+        where
+          ok newFollow =
+            Right Turns
+              { prevMover = Just username
+              , mustFollow = newFollow
+              , notMovedYet = Set.delete username notMovedYet
+              }
   tiles <-
     case [tile | PlaceTile tile <- moveTiles] of
       [] -> Left NoPlacedTiles
@@ -335,7 +389,8 @@ applyMove username move@Move{ tiles = moveTiles } game@GameState{ board, players
         username
         players
   return
-    ( fillRack username game{ board = nextBoard, players = newPlayers }
+    ( fillRack username
+      $ game{ board = nextBoard, players = newPlayers, turns = nextTurns }
     , MoveReport{ moveMadeBy = username, moveWords, moveScore }
     )
 

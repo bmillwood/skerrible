@@ -39,7 +39,9 @@ init flags =
                     Just _ -> Model.JoinRoom
               , roomCode = Maybe.withDefault "" room
               , roomSettings =
-                  { noBoardMultipliers = False }
+                  { noBoardMultipliers = False
+                  , turnEnforcement = Model.NoEnforcement
+                  }
               }
           }
     }
