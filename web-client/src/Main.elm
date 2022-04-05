@@ -88,25 +88,9 @@ update msg model =
       case msg of
         Err error -> failed (Msg.errorToString error)
         Ok Msg.ClearError -> ({ model | error = Nothing }, Cmd.none)
-        Ok Msg.DoNothing -> (model, Cmd.none)
-        Ok (Msg.ComposeMessage _) -> failed "Can't compose message before login!"
-        Ok (Msg.SendMessage _) -> failed "Can't send message before login!"
-        Ok (Msg.ReceiveChatMessage _) -> failed "Unexpected message before login!"
-        Ok (Msg.ReceiveMove _) -> failed "Unexpected move before login!"
-        Ok (Msg.ReceiveUndone _) -> failed "Unexpected undo before login!"
-        Ok (Msg.UpdateRoomCode code) -> loggedIn code
-        Ok (Msg.UpdateScores _) -> failed "Unexpected scores before login!"
-        Ok (Msg.UpdateBoard _) -> failed "Unexpected board before login!"
-        Ok (Msg.UpdateTileData _) -> failed "Unexpected tile data before login!"
-        Ok (Msg.UpdateRack _) -> failed "Unexpected rack before login!"
-        Ok (Msg.ShuffleRack _) -> failed "Unexpected rack shuffle before login!"
-        Ok (Msg.SetTransientError _) ->
-          failed "Unexpected transient error before login!"
-        Ok (Msg.ProposeMove _) -> failed "Can't propose move before login!"
-        Ok Msg.SendMove -> failed "Can't send move before login!"
-        Ok Msg.SendUndo -> failed "Can't send undo before login!"
-        Ok (Msg.MoveResult _) -> failed "Unexpected move result before login!"
         Ok Msg.ClearMoveError -> (model, Cmd.none)
+        Ok Msg.DoNothing -> (model, Cmd.none)
+        Ok (Msg.UpdateRoomCode code) -> loggedIn code
         Ok (Msg.PreLogin loginMsg) ->
           case loginMsg of
             Msg.Update newForm ->
@@ -124,6 +108,7 @@ update msg model =
               )
             Msg.Failed error ->
               failed error
+        Ok other -> failed "Ingame-only message outside of game"
     Model.InGame ({ chat, game } as inGame) ->
       let
         setChat newChat = { model | state = Model.InGame { inGame | chat = newChat } }
@@ -132,9 +117,9 @@ update msg model =
       in
       case msg of
         Err errorMsg -> error (Msg.errorToString errorMsg)
+        Ok (Msg.PreLogin _) -> error "Pre-login message after login"
         Ok Msg.ClearError -> ( { model | error = Nothing }, Cmd.none )
         Ok Msg.DoNothing -> ( model, Cmd.none )
-        Ok (Msg.PreLogin _) -> ( model, Cmd.none )
         Ok (Msg.UpdateRoomCode code) ->
           ( { model | state = Model.InGame { inGame | roomCode = code } }, Cmd.none )
         Ok (Msg.ComposeMessage composed) ->
