@@ -69,10 +69,11 @@ chat message =
   withTag "Chat" [("msgToSend", Json.Encode.string message)]
   |> send
 
+sendPass : Cmd msg
+sendPass = send (withTag "Pass" [])
+
 sendUndo : Cmd msg
-sendUndo =
-  withTag "Undo" []
-  |> send
+sendUndo = send (withTag "Undo" [])
 
 encodeDirection : Move.Direction -> Json.Encode.Value
 encodeDirection d =
@@ -90,6 +91,12 @@ encodeTile tile =
         [("contents", Json.Encode.string (String.fromChar c))]
     Board.Blank ->
       withTag "Blank" []
+
+sendExchange : List Board.Tile -> Cmd msg
+sendExchange tiles =
+  case tiles of
+    [] -> Cmd.none
+    _ -> send (withTag "Exchange" [("contents", Json.Encode.list encodeTile tiles)])
 
 encodeMoveTile : Move.Tile -> Json.Encode.Value
 encodeMoveTile moveTile =
@@ -256,13 +263,27 @@ serverMsg =
         (Json.Decode.field "chatContent" Json.Decode.string)
       |> Json.Decode.map (Ok << Msg.ReceiveChatMessage)
 
-    playerMoved =
-      Json.Decode.map3
-        Model.MoveReport
-        (Json.Decode.field "moveMadeBy" Json.Decode.string)
+    playedWord =
+      Json.Decode.map2
+        (\words score -> Model.PlayedWord { words = words, score = score })
         (Json.Decode.field "moveWords" (Json.Decode.list Json.Decode.string))
         (Json.Decode.field "moveScore" Json.Decode.int)
-      |> Json.Decode.map (Ok << Msg.ReceiveMove)
+    exchanged = Json.Decode.map Model.Exchanged Json.Decode.int
+    moveReport =
+      variant
+        { name = "playerMoved" }
+        [ ( "PlayedWord", WithFieldsInline playedWord )
+        , ( "Exchanged", WithContents exchanged )
+        , ( "Passed", Plain Model.Passed )
+        , ( "Undone", Plain Model.Undone )
+        ]
+    playerMoved =
+      Json.Decode.map2
+        (\player report ->
+          Ok (Msg.ReceiveMove { player = player, moveReport = report })
+        )
+        (Json.Decode.field "movePlayer" Json.Decode.string)
+        (Json.Decode.field "moveReport" moveReport)
 
     tileData =
       Json.Decode.map2
@@ -327,15 +348,12 @@ serverMsg =
         , ( "NotAWord"
           , WithContents (Json.Decode.map Move.NotAWord (Json.Decode.list move))
           )
+        , ( "NotEnoughTilesToExchange", Plain Move.NotEnoughTilesToExchange )
         ]
     moveOk = Json.Decode.succeed ()
     moveResult =
       eitherResult moveError moveOk
       |> Json.Decode.map (Ok << Msg.MoveResult)
-
-    undone =
-      Json.Decode.field "undoneBy" Json.Decode.string
-      |> Json.Decode.map (\by -> Ok (Msg.ReceiveUndone { by = by }))
   in
   variant
     { name = "serverMsg" }
@@ -344,13 +362,12 @@ serverMsg =
     , ( "UpdateRoomCode", WithContents updateRoomCode )
     , ( "Scores", WithContents scores )
     , ( "ChatMessage", WithFieldsInline message )
-    , ( "PlayerMoved", WithContents playerMoved )
+    , ( "PlayerMoved", WithFieldsInline playerMoved )
     , ( "UpdateTileData", WithContents updateTileData )
     , ( "UpdateBoard", WithContents updateBoard )
     , ( "UpdateRack", WithContents updateRack )
     , ( "MoveResult", WithContents moveResult )
     , ( "GameOver", Plain (Ok Msg.GameOver) )
-    , ( "Undone", WithFieldsInline undone )
     ]
 
 fromJS : Json.Decode.Decoder Msg

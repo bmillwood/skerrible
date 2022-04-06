@@ -202,7 +202,7 @@ applyUndo roomState@RoomState{ gameStore } username = do
         mapM_ (broadcast roomState)
           [ Scores (scores latest)
           , UpdateBoard uBoard
-          , Undone { undoneBy = username }
+          , PlayerMoved { movePlayer = username, moveReport = Undone }
           ]
         return undone
 
@@ -259,10 +259,14 @@ playerRead roomState@RoomState{ roomCode } conn username = forever $ do
         Nothing ->
           broadcast roomState
             ChatMessage{ chatSentBy = username, chatContent = msgToSend }
+    Just (MakeMove move) -> doMove (applyMove username move)
+    Just (Exchange tiles) -> doMove (applyExchange username tiles)
+    Just Pass -> doMove (applyPass username)
     Just Undo -> applyUndo roomState username
-    Just (MakeMove move) ->
+  where
+    doMove applyToGame =
       modifyGame CanUndo roomState $ \game ->
-        case applyMove username move game of
+        case applyToGame game of
           Right (nextGame@GameState{ board, players }, moveReport) -> do
             sendToClient roomState username (MoveResult (Right ()))
             case Map.lookup username players of
@@ -270,7 +274,7 @@ playerRead roomState@RoomState{ roomCode } conn username = forever $ do
               Just PlayerState{ rack } ->
                 sendToClient roomState username (UpdateRack rack)
             mapM_ (broadcast roomState)
-              [ PlayerMoved moveReport
+              [ PlayerMoved { movePlayer = username, moveReport }
               , Scores (scores nextGame)
               , UpdateBoard board
               ]

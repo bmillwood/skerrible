@@ -17,7 +17,7 @@ type alias Game =
   , tileData : DictTile Board.TileData
   , scores : Dict String Int
   , rack : Board.Rack
-  , proposedMove : Maybe Move
+  , proposal : Maybe Move.Proposal
   , moveError : Maybe Move.Error
   , transientError : Maybe TransientError
   }
@@ -27,18 +27,17 @@ type alias Chat =
   , message : String
   }
 
-type alias MoveReport =
-  { madeBy : String
-  , words : List String
-  , score : Int
-  }
+type MoveReport
+  = PlayedWord { words : List String, score : Int }
+  | Exchanged Int
+  | Passed
+  | Undone
 
 type Message
   = Joined String
   | Left String
   | Chatted Chat
-  | PlayerMoved MoveReport
-  | PlayerUndo { by : String }
+  | PlayerMoved { player : String, moveReport : MoveReport }
   | GameOver
 
 type RoomAction

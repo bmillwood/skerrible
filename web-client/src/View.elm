@@ -243,19 +243,20 @@ viewBoard { board, tileData, proposedMove, transientError } =
               else Nothing
         newMove direction =
           { startRow = rowN, startCol = colN, direction = direction, tiles = [] }
+        proposeMove move = Msg.Propose (Just (Move.ProposeMove move))
         attributes =
           [ [ Attributes.style "background-color" bgColor
             , Events.onClick (
                 case proposedMove of
-                  Nothing -> Msg.ProposeMove (Just (newMove Move.Right))
+                  Nothing -> proposeMove (newMove Move.Right)
                   Just { startRow, startCol, direction, tiles } ->
                     if not (List.isEmpty tiles)
-                    then Msg.DoNothing
+                    then Msg.doNothing
                     else
                       case directionIfHere of
-                        Nothing -> Msg.ProposeMove (Just (newMove Move.Right))
-                        Just Move.Right -> Msg.ProposeMove (Just (newMove Move.Down))
-                        Just Move.Down -> Msg.ProposeMove Nothing
+                        Nothing -> proposeMove (newMove Move.Right)
+                        Just Move.Right -> proposeMove (newMove Move.Down)
+                        Just Move.Down -> Msg.Propose Nothing
               )
             ]
           , tileStyle
@@ -334,13 +335,19 @@ viewError error =
         Just Move.GameIsOver -> "The game has already ended."
         Just Move.NotYourTurn -> "It's not your turn!"
         Just Move.OffBoard -> "Your move starts or ends off the edge of the board."
-        Just Move.TilesDoNotMatchBoard -> "The tiles you provided don't match the ones on the board."
+        Just Move.TilesDoNotMatchBoard ->
+          "The tiles you provided don't match the ones on the board."
         Just Move.NoPlacedTiles -> "Your move doesn't use any tiles from your rack."
-        Just (Move.YouDoNotHave _) -> "You don't have the letters necessary for that move."
-        Just Move.FirstMoveNotInCentre -> "The first move must go through the centre tile."
-        Just Move.NoMultiletterWordsMade -> "Your move doesn't create a word of at least two letters."
+        Just (Move.YouDoNotHave _) ->
+          "You don't have the letters necessary for that move."
+        Just Move.FirstMoveNotInCentre ->
+          "The first move must go through the centre tile."
+        Just Move.NoMultiletterWordsMade ->
+          "Your move doesn't create a word of at least two letters."
         Just Move.DoesNotConnect -> "Your move doesn't connect with existing tiles."
         Just (Move.NotAWord _) -> "At least one of the words you made doesn't exist."
+        Just Move.NotEnoughTilesToExchange ->
+          "There aren't enough tiles in the bag to exchange that many."
   in
   Html.div
     [ Events.onClick Msg.ClearMoveError
@@ -351,10 +358,11 @@ viewError error =
 viewRack
   :  { rack : Board.Rack
      , tileData : DictTile Board.TileData
+     , proposedExchange : Maybe (List Board.Tile)
      , rackError : Bool
      }
   -> Html Msg.OkMsg
-viewRack { rack, tileData, rackError } =
+viewRack { rack, tileData, proposedExchange, rackError } =
   let
     rackTile tile =
       viewTile tile tileData { partOfMove = False, error = False }
@@ -378,7 +386,34 @@ viewRack { rack, tileData, rackError } =
         [ Html.tr [] (List.map rackTile rack ++ [ spaceTd ]) ]
     , Html.button
         [ Events.onClick (Msg.ShuffleRack Nothing) ]
-        [ Html.text "\u{1f500}" ]
+        [ Html.text "\u{1f500} Rearrange" ]
+    , let
+        id = "exchangeButton"
+      in
+      Html.button
+        [ Attributes.id id
+        , Events.onClick (
+            Msg.Many
+              [ Msg.Propose (Just (Move.ProposeExchange []))
+              , -- if I don't do this the keypresses don't reach the global handler
+                Msg.BlurById id
+              ]
+          )
+        , Attributes.disabled
+          <| case proposedExchange of
+            Nothing -> False
+            Just _ -> True
+        ]
+        [ Html.text "\u{1f5d1} "
+        , Html.text
+          <| case proposedExchange of
+            Nothing -> "Exchange"
+            Just tiles ->
+              "Exchanging " ++ String.fromList (List.map Board.tileToChar tiles)
+        ]
+    , Html.button
+        [ Events.onClick Msg.SendPass ]
+        [ Html.text "\u{1f937} Pass" ]
     ]
 
 viewChatting : Model.ChattingState -> Html Msg.OkMsg
@@ -415,23 +450,30 @@ viewChatting { folks, me, messageEntry, history } =
               ( sender
               , [ Html.text (": " ++ message) ]
               )
-            Model.PlayerMoved { madeBy, words, score } ->
-              ( madeBy
-              , [ [ Html.text "played " ]
-                , List.concatMap
-                    (\word -> [ Html.text ", ", Html.text word ])
-                    words
-                  |> List.drop 1
-                , [ Html.text ", for "
-                  , Html.text (String.fromInt score)
-                  , Html.text " points"
-                  ]
-                ] |> List.concat
-              )
-            Model.PlayerUndo { by } ->
-              ( by
-              , [ Html.text "undid the last move" ]
-              )
+            Model.PlayerMoved { player, moveReport } ->
+              case moveReport of
+                Model.PlayedWord { words, score } ->
+                  ( player
+                  , [ [ Html.text "played " ]
+                    , List.concatMap
+                        (\word -> [ Html.text ", ", Html.text word ])
+                        words
+                      |> List.drop 1
+                    , [ Html.text ", for "
+                      , Html.text (String.fromInt score)
+                      , Html.text " points"
+                      ]
+                    ] |> List.concat
+                  )
+                Model.Exchanged numTiles ->
+                  ( player
+                  , [ Html.text "exchanged "
+                    , Html.text (String.fromInt numTiles)
+                    , Html.text " tiles"
+                    ]
+                  )
+                Model.Passed -> ( player, [ Html.text "passed their turn" ] )
+                Model.Undone -> ( player, [ Html.text "undid the last move" ] )
             Model.GameOver ->
               ( ""
               , [ Html.strong [] [ Html.text "The game has ended!" ] ]
@@ -484,9 +526,9 @@ view { error, state } =
           Model.InGame { chat, game, roomCode } ->
             let
               remainingRack =
-                case game.proposedMove of
+                case game.proposal of
                   Nothing -> game.rack
-                  Just move -> Move.remainingRack move game.rack
+                  Just p -> Move.remainingRack p game.rack
             in
             Html.map Ok (
                 Html.div
@@ -502,7 +544,11 @@ view { error, state } =
                   , viewBoard
                       { board = game.board
                       , tileData = game.tileData
-                      , proposedMove = game.proposedMove
+                      , proposedMove =
+                          case game.proposal of
+                            Nothing -> Nothing
+                            Just (Move.ProposeMove move) -> Just move
+                            Just (Move.ProposeExchange _) -> Nothing
                       , transientError = game.transientError
                       }
                   , viewScores game.scores
@@ -517,6 +563,11 @@ view { error, state } =
                   , viewRack
                       { rack = remainingRack
                       , tileData = game.tileData
+                      , proposedExchange =
+                          case game.proposal of
+                            Nothing -> Nothing
+                            Just (Move.ProposeMove _) -> Nothing
+                            Just (Move.ProposeExchange tiles) -> Just tiles
                       , rackError = game.transientError == Just Model.RackError
                       }
                   , Html.hr [ Attributes.style "clear" "both" ] []

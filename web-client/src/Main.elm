@@ -1,6 +1,7 @@
 module Main exposing (main)
 
 import Browser
+import Browser.Dom
 import Browser.Events
 import Dict
 import Json.Decode
@@ -53,6 +54,17 @@ init flags =
 view : Model -> Html Msg
 view = View.view
 
+updates : List Msg -> Model -> (Model, Cmd Msg)
+updates msgs model =
+  case msgs of
+    [] -> (model, Cmd.none)
+    firstMsg :: restMsgs ->
+      let
+        (nextModel, nextCmd) = update firstMsg model
+        (lastModel, lastCmd) = updates restMsgs nextModel
+      in
+      (lastModel, Cmd.batch [nextCmd, lastCmd])
+
 update : Msg -> Model -> (Model, Cmd Msg)
 update msg model =
   case model.state of
@@ -80,9 +92,9 @@ update msg model =
                       , tileData = DictTile.empty
                       , scores = Dict.empty
                       , rack = []
-                      , transientError = Nothing
-                      , proposedMove = Nothing
+                      , proposal = Nothing
                       , moveError = Nothing
+                      , transientError = Nothing
                       }
                   , roomCode = roomCode
                   }
@@ -94,7 +106,7 @@ update msg model =
         Err error -> failed (Msg.errorToString error)
         Ok Msg.ClearError -> ({ model | error = Nothing }, Cmd.none)
         Ok Msg.ClearMoveError -> (model, Cmd.none)
-        Ok Msg.DoNothing -> (model, Cmd.none)
+        Ok (Msg.Many msgs) -> updates (List.map Ok msgs) model
         Ok (Msg.UpdateRoomCode code) -> loggedIn code
         Ok (Msg.PreLogin loginMsg) ->
           case loginMsg of
@@ -121,7 +133,7 @@ update msg model =
         Err errorMsg -> error (Msg.errorToString errorMsg)
         Ok (Msg.PreLogin _) -> error "Pre-login message after login"
         Ok Msg.ClearError -> ( { model | error = Nothing }, Cmd.none )
-        Ok Msg.DoNothing -> ( model, Cmd.none )
+        Ok (Msg.Many msgs) -> updates (List.map Ok msgs) model
         Ok (Msg.UpdateRoomCode code) ->
           ( { model | state = Model.InGame { inGame | roomCode = code } }, Cmd.none )
         Ok (Msg.ComposeMessage composed) ->
@@ -138,10 +150,6 @@ update msg model =
           ( setChat { chat | history = Model.PlayerMoved moveReport :: chat.history }
           , Cmd.none
           )
-        Ok (Msg.ReceiveUndone by) ->
-          ( setChat { chat | history = Model.PlayerUndo by :: chat.history }
-          , Cmd.none
-          )
         Ok Msg.GameOver ->
           ( setChat { chat | history = Model.GameOver :: chat.history }
           , Cmd.none
@@ -151,7 +159,7 @@ update msg model =
         Ok (Msg.UpdateTileData tileData) ->
           ( setGame { game | tileData = tileData }, Cmd.none )
         Ok (Msg.UpdateRack newRack) ->
-          ( setGame { game | rack = newRack }, Cmd.none )
+          ( setGame { game | rack = newRack, proposal = Nothing }, Cmd.none )
         Ok (Msg.ShuffleRack Nothing) ->
           -- Generate a list of indices instead of a shuffled rack to avoid
           -- overwriting in-flight racks from the server.
@@ -175,17 +183,19 @@ update msg model =
             ( model, Cmd.none )
         Ok (Msg.SetTransientError newTransientError) ->
           ( setGame { game | transientError = newTransientError }, Cmd.none )
-        Ok (Msg.ProposeMove move) ->
-          ( setGame { game | proposedMove = move }, Cmd.none )
-        Ok Msg.SendMove ->
-          case game.proposedMove of
+        Ok (Msg.Propose proposal) ->
+          ( setGame { game | proposal = proposal }, Cmd.none )
+        Ok Msg.SendProposal ->
+          case game.proposal of
             Nothing -> ( model, Cmd.none )
-            Just move -> ( model, Ports.sendMove move )
+            Just (Move.ProposeMove move) -> ( model, Ports.sendMove move )
+            Just (Move.ProposeExchange tiles) -> ( model, Ports.sendExchange tiles )
+        Ok Msg.SendPass -> ( model, Ports.sendPass )
         Ok Msg.SendUndo -> ( model, Ports.sendUndo )
         Ok (Msg.MoveResult (Err moveError)) ->
           ( setGame { game | moveError = Just moveError }, Cmd.none )
         Ok (Msg.MoveResult (Ok ())) ->
-          ( setGame { game | moveError = Nothing, proposedMove = Nothing }, Cmd.none )
+          ( setGame { game | moveError = Nothing, proposal = Nothing }, Cmd.none )
         Ok Msg.ClearMoveError ->
           ( setGame { game | moveError = Nothing }, Cmd.none )
         Ok (Msg.UpdateScores newScores) ->
@@ -211,47 +221,63 @@ update msg model =
             }
           , Cmd.none
           )
+        Ok (Msg.BlurById blurId) ->
+          ( model
+          , Task.attempt (\_ -> Ok Msg.doNothing) (Browser.Dom.blur blurId)
+          )
 
-updateMoveWithKey : Board -> Board.Rack -> Move -> Key -> Msg.OkMsg
-updateMoveWithKey board rack move key =
-  case key of
-    Key.Backspace ->
-      Msg.ProposeMove (Just { move | tiles = List.take (List.length move.tiles - 1) move.tiles })
-    Key.Enter -> Msg.SendMove
-    Key.Char c ->
+updateProposalWithKey : Board -> Board.Rack -> Move.Proposal -> Key -> Msg.OkMsg
+updateProposalWithKey board rack proposal key =
+  let
+    backspace tiles = List.take (List.length tiles - 1) tiles
+    updateMove move = Msg.Propose (Just (Move.ProposeMove move))
+    updateExchange newTiles = Msg.Propose (Just (Move.ProposeExchange newTiles))
+    addChar addTile c =
+      case Board.tileOfChar c of
+        Nothing -> Msg.doNothing
+        Just tile ->
+          if List.member tile (Move.remainingRack proposal rack)
+          then addTile tile
+          else Msg.SetTransientError (Just Model.RackError)
+    cancelProposal tiles =
+      if List.isEmpty tiles
+      then Msg.Propose Nothing
+      else Msg.doNothing
+  in
+  case (proposal, key) of
+    (Move.ProposeMove move, Key.Backspace) ->
+      updateMove { move | tiles = backspace move.tiles }
+    (Move.ProposeExchange tiles, Key.Backspace) -> updateExchange (backspace tiles)
+    (_, Key.Enter) -> Msg.SendProposal
+    (Move.ProposeExchange tiles, Key.Char c) ->
+      addChar (\tile -> updateExchange (tiles ++ [tile])) c
+    (Move.ProposeMove move, Key.Char c) ->
       let
         (i, j) = Move.nextPos move
-        addTile moveTile =
-          Msg.ProposeMove (Just { move | tiles = move.tiles ++ [moveTile] })
+        addTile moveTile = updateMove { move | tiles = move.tiles ++ [moveTile] }
       in
       case Board.get i j board of
         Nothing -> Msg.SetTransientError (Just Model.BoardError)
         Just sq ->
           case sq.tile of
-            Nothing ->
-              case Board.tileOfChar c of
-                Nothing -> Msg.DoNothing
-                Just tile ->
-                  if List.member tile (Move.remainingRack move rack)
-                  then addTile (Move.PlaceTile tile)
-                  else Msg.SetTransientError (Just Model.RackError)
+            Nothing -> addChar (\tile -> addTile (Move.PlaceTile tile)) c
             Just tile ->
               if Board.tileToChar tile == c
               then addTile Move.UseBoard
               else Msg.SetTransientError (Just (Model.SquareError i j))
-    Key.Escape ->
-      if List.isEmpty move.tiles
-      then Msg.ProposeMove Nothing
-      else Msg.DoNothing
-    Key.Other -> Msg.DoNothing
+    (Move.ProposeMove move, Key.Escape) ->
+      cancelProposal move.tiles
+    (Move.ProposeExchange tiles, Key.Escape) ->
+      cancelProposal tiles
+    (_, Key.Other) -> Msg.doNothing
 
 handleKey : Model.Game -> Json.Decode.Decoder Msg.OkMsg
 handleKey game =
-  case game.proposedMove of
-    Nothing -> Json.Decode.succeed Msg.DoNothing
-    Just move ->
+  case game.proposal of
+    Nothing -> Json.Decode.succeed Msg.doNothing
+    Just proposal ->
       Json.Decode.map
-        (updateMoveWithKey game.board game.rack move)
+        (updateProposalWithKey game.board game.rack proposal)
         Key.decodeKey
 
 subscriptions : Model -> Sub Msg
@@ -259,7 +285,7 @@ subscriptions model =
   let
     ifPlaying decoderOfGame =
       case model.state of
-        Model.PreLogin _ -> Json.Decode.succeed (Ok Msg.DoNothing)
+        Model.PreLogin _ -> Json.Decode.succeed (Ok Msg.doNothing)
         Model.InGame { game } -> Json.Decode.map Ok (decoderOfGame game)
   in
   Sub.batch

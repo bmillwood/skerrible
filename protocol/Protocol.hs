@@ -103,6 +103,7 @@ data MoveError
   | NoMultiletterWordsMade
   | DoesNotConnect
   | NotAWord (NonEmpty Move)
+  | NotEnoughTilesToExchange
   deriving (Generic, Show)
 
 instance Aeson.FromJSON MoveError
@@ -152,6 +153,8 @@ data FromClient
   = LoginRequest { loginRequestName :: Username, roomSpec :: RoomSpec }
   | Chat { msgToSend :: Text }
   | MakeMove Move
+  | Exchange (NonEmpty Tile)
+  | Pass
   | Undo
   deriving (Generic, Show)
 
@@ -181,12 +184,14 @@ validChat t = checkTooLong t 1000
 instance Aeson.FromJSON FromClient
 instance Aeson.ToJSON FromClient
 
-data MoveReport =
-  MoveReport
-    { moveMadeBy :: Username
-    , moveWords :: [String]
-    , moveScore :: Integer
-    }
+data MoveReport
+  = PlayedWord
+      { moveWords :: [String]
+      , moveScore :: Integer
+      }
+  | Exchanged Integer
+  | Passed
+  | Undone
   deriving (Generic, Show)
 
 instance Aeson.FromJSON MoveReport
@@ -198,13 +203,12 @@ data ToClient
   | UpdateRoomCode RoomCode
   | Scores (Map Username Integer)
   | ChatMessage { chatSentBy :: Username, chatContent :: Text }
-  | PlayerMoved MoveReport
+  | PlayerMoved { movePlayer :: Username, moveReport :: MoveReport }
   | UpdateTileData (Map Tile TileData)
   | UpdateBoard Board
   | UpdateRack Rack
   | MoveResult (Either MoveError ())
   | GameOver
-  | Undone { undoneBy :: Username }
   deriving (Generic, Show)
 
 instance Aeson.FromJSON ToClient

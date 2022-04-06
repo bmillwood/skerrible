@@ -2,14 +2,13 @@
 module Game where
 
 import Control.Monad (foldM)
-import Data.Bifunctor (first)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map as Map
 import Data.Map (Map)
 import qualified Data.Set as Set
 import Data.Set (Set)
-import Data.Maybe (isJust, isNothing)
+import Data.Maybe
 import qualified System.Random as Random
 
 import Protocol
@@ -327,6 +326,20 @@ takeFrom (x : xs) right =
         Right _ -> Left (x :| [])
     (before, _ : after) -> takeFrom xs (before ++ after)
 
+removeFromPlayerRack
+  :: [Tile]
+  -> Username
+  -> Map Username PlayerState
+  -> Either MoveError (Map Username PlayerState)
+removeFromPlayerRack tiles username players = do
+  Map.alterF removeFromRack username players
+  where
+    removeFromRack Nothing = Left YouAreNotPlaying
+    removeFromRack (Just pst@PlayerState{ rack = Rack rackTiles }) =
+      case takeFrom tiles rackTiles of
+        Left missing -> Left (YouDoNotHave missing)
+        Right remaining -> Right (Just pst{ rack = Rack remaining })
+
 applyGameEnd :: GameState -> Maybe GameState
 applyGameEnd game@GameState{ players }
   | any (\PlayerState{ rack = Rack tiles } -> null tiles) players =
@@ -342,6 +355,26 @@ applyGameEnd game@GameState{ players }
       | null tiles = pst{ score = score + unplayedTileScore }
       | otherwise = pst{ score = score - rackScore pst }
 
+advanceTurns :: Username -> TurnState -> Either MoveError TurnState
+advanceTurns _ NoTurns = Right NoTurns
+advanceTurns username Turns{ prevMover, mustFollow, notMovedYet } =
+  case (prevMover, Map.lookup username mustFollow) of
+    (Nothing, _) -> ok mustFollow
+    (Just actual, Just expected)
+      | expected /= actual -> Left NotYourTurn
+      | otherwise -> ok mustFollow
+    (Just prev, Nothing)
+      | Set.member username notMovedYet || Set.null notMovedYet ->
+          ok $ Map.insert username prev mustFollow
+      | otherwise -> Left NotYourTurn
+  where
+    ok newFollow =
+      Right Turns
+        { prevMover = Just username
+        , mustFollow = newFollow
+        , notMovedYet = Set.delete username notMovedYet
+        }
+
 applyMove :: Username -> Move -> GameState -> Either MoveError (GameState, MoveReport)
 applyMove _ _ GameState{ gameOver = True } = Left GameIsOver
 applyMove
@@ -349,50 +382,54 @@ applyMove
   move@Move{ tiles = moveTiles }
   game@GameState{ board, turns, players }
   = do
-  nextTurns <-
-    case turns of
-      NoTurns -> Right NoTurns
-      Turns{ prevMover, mustFollow, notMovedYet } ->
-        case (prevMover, Map.lookup username mustFollow) of
-          (Nothing, _) -> ok mustFollow
-          (Just actual, Just expected)
-            | expected /= actual -> Left NotYourTurn
-            | otherwise -> ok mustFollow
-          (Just prev, Nothing)
-            | Set.member username notMovedYet || Set.null notMovedYet ->
-                ok $ Map.insert username prev mustFollow
-            | otherwise -> Left NotYourTurn
-        where
-          ok newFollow =
-            Right Turns
-              { prevMover = Just username
-              , mustFollow = newFollow
-              , notMovedYet = Set.delete username notMovedYet
-              }
+  nextTurns <- advanceTurns username turns
   tiles <-
     case [tile | PlaceTile tile <- moveTiles] of
       [] -> Left NoPlacedTiles
       tiles -> Right tiles
-  Rack rackTiles <-
-    case Map.lookup username players of
-      Nothing -> Left YouAreNotPlaying
-      Just PlayerState{ rack } -> Right rack
-  newRackTiles <- first YouDoNotHave (takeFrom tiles rackTiles)
+  unrackedPlayers <- removeFromPlayerRack tiles username players
   nextBoard <- applyMoveToBoard move board
   let
     (moveWords, moveScore) = scoreMove move board -- not nextBoard
     newPlayers =
       Map.adjust
-        (\pst@PlayerState{ score } ->
-          pst{ rack = Rack newRackTiles, score = score + moveScore }
-        )
+        (\pst@PlayerState{ score } -> pst{ score = score + moveScore })
         username
-        players
+        unrackedPlayers
   return
     ( fillRack username
-      $ game{ board = nextBoard, players = newPlayers, turns = nextTurns }
-    , MoveReport{ moveMadeBy = username, moveWords, moveScore }
+        game{ board = nextBoard, players = newPlayers, turns = nextTurns }
+    , PlayedWord{ moveWords, moveScore }
     )
+
+returnToBag :: [Tile] -> GameState -> GameState
+returnToBag tiles game@GameState{ bag } =
+  game{ bag = foldl returnTile bag tiles }
+  where
+    returnTile acc tile = Map.insertWith (+) tile 1 acc
+
+applyExchange
+  :: Username
+  -> NonEmpty Tile
+  -> GameState
+  -> Either MoveError (GameState, MoveReport)
+applyExchange _ tiles GameState{ bag }
+  | toInteger (length tiles) > sum bag = Left NotEnoughTilesToExchange
+applyExchange username tilesNE game@GameState{ players, turns } = do
+  let tiles = NonEmpty.toList tilesNE
+  nextTurns <- advanceTurns username turns
+  nextPlayers <- removeFromPlayerRack tiles username players
+  Right
+    ( returnToBag tiles
+      $ fillRack username
+      $ game{ players = nextPlayers, turns = nextTurns }
+    , Exchanged (toInteger $ length tiles)
+    )
+
+applyPass :: Username -> GameState -> Either MoveError (GameState, MoveReport)
+applyPass username game@GameState{ turns } = do
+  nextTurns <- advanceTurns username turns
+  Right ( game{ turns = nextTurns }, Passed )
 
 tileData :: Map Tile TileData
 tileData =

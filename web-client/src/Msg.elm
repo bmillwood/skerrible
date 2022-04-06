@@ -16,27 +16,31 @@ type LoginFormMsg
   | Failed String
 
 type OkMsg
-  = DoNothing
+  = Many (List OkMsg)
   | ClearError
   | PreLogin LoginFormMsg
   | UpdateRoomCode String
   | ComposeMessage String
   | SendMessage String
   | ReceiveChatMessage Model.Chat
-  | ReceiveMove Model.MoveReport
-  | ReceiveUndone { by : String }
+  | ReceiveMove { player : String, moveReport : Model.MoveReport }
   | UpdateScores (Dict String Int)
   | UpdateBoard Board
   | UpdateTileData (DictTile Board.TileData)
   | UpdateRack Board.Rack
   | ShuffleRack (Maybe (List Int))
-  | ProposeMove (Maybe Move)
-  | SendMove
+  | Propose (Maybe Move.Proposal)
+  | SendProposal
+  | SendPass
   | SendUndo
   | MoveResult (Result Move.Error ())
   | GameOver
   | ClearMoveError
   | SetTransientError (Maybe Model.TransientError)
+  | BlurById String
+
+doNothing : OkMsg
+doNothing = Many []
 
 type Error
   = ServerDisconnected

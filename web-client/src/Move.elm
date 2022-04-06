@@ -10,12 +10,22 @@ type Tile
   = PlaceTile Board.Tile
   | UseBoard
 
+placedTile : Tile -> Maybe Board.Tile
+placedTile t =
+  case t of
+    UseBoard -> Nothing
+    PlaceTile tile -> Just tile
+
 type alias Move =
   { startRow : Int
   , startCol : Int
   , direction : Direction
   , tiles : List Tile
   }
+
+type Proposal
+  = ProposeMove Move
+  | ProposeExchange (List Board.Tile)
 
 posAt : Int -> Move -> (Int, Int)
 posAt i { startRow, startCol, direction } =
@@ -38,22 +48,21 @@ tileAtPos rowN colN { startRow, startCol, direction, tiles } =
       then List.head (List.drop (rowN - startRow) tiles)
       else Nothing
 
-remainingRack : Move -> Board.Rack -> Board.Rack
-remainingRack move rack =
+diffList : List a -> List a -> List a
+diffList xs ys =
   let
-    deleteFromList x xs =
-      case xs of
+    deleteFromList y xsLeft =
+      case xsLeft of
         [] -> []
-        y :: ys -> if x == y then ys else y :: deleteFromList x ys
+        x :: rest -> if x == y then rest else x :: deleteFromList y rest
   in
-  List.foldl
-    (\t a ->
-      case t of
-        UseBoard -> a
-        PlaceTile tile -> deleteFromList tile a
-    )
-    rack
-    move.tiles
+  List.foldl deleteFromList xs ys
+
+remainingRack : Proposal -> Board.Rack -> Board.Rack
+remainingRack proposal rack =
+  case proposal of
+    ProposeMove move -> diffList rack (List.filterMap placedTile move.tiles)
+    ProposeExchange tiles -> diffList rack tiles
 
 type Error
   = YouAreNotPlaying
@@ -67,3 +76,4 @@ type Error
   | NoMultiletterWordsMade
   | DoesNotConnect
   | NotAWord (List Move)
+  | NotEnoughTilesToExchange
