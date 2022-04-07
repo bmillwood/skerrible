@@ -95,6 +95,7 @@ update msg model =
                       , proposal = Nothing
                       , moveError = Nothing
                       , transientError = Nothing
+                      , showHelp = True
                       }
                   , roomCode = roomCode
                   }
@@ -225,6 +226,8 @@ update msg model =
           ( model
           , Task.attempt (\_ -> Ok Msg.doNothing) (Browser.Dom.blur blurId)
           )
+        Ok (Msg.SetHelpVisible showHelp) ->
+          ( setGame { game | showHelp = showHelp }, Cmd.none )
 
 updateProposalWithKey : Board -> Board.Rack -> Move.Proposal -> Key -> Msg.OkMsg
 updateProposalWithKey board rack proposal key =

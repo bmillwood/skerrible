@@ -47,7 +47,7 @@ radios { name, disabled } items =
     [ Attributes.style "list-style-type" "none" ]
     (List.map radio items)
 
-viewPreLogin : Model.PreLoginState -> Html Msg.LoginFormMsg
+viewPreLogin : Model.PreLoginState -> Html Msg.OkMsg
 viewPreLogin { loginState, loginForm } =
   let
     { endpoint, username, roomCode, roomAction, roomSettings } = loginForm
@@ -74,6 +74,7 @@ viewPreLogin { loginState, loginForm } =
       Html.input
         [ Attributes.type_ "text"
         , Attributes.value roomCode
+        , Attributes.placeholder "code"
         , Attributes.disabled (roomAction /= Model.JoinRoom)
         , Events.onInput (\newCode -> Msg.Update { loginForm | roomCode = newCode })
         ]
@@ -158,10 +159,23 @@ viewPreLogin { loginState, loginForm } =
         []
   in
   Html.form
-    [ Events.onSubmit Msg.Submit ]
-    [ Html.p [] [ Html.text "Server: ", endpointInput ]
-    , Html.p [] [ Html.text "Username: ", usernameInput ]
-    , roomSpec
+    [ Events.onSubmit (
+          if String.isEmpty loginForm.username
+          then Msg.doNothing
+          else Msg.PreLogin Msg.Submit
+        )
+    ]
+    [ Html.p
+        []
+        [ Html.text "Server: "
+        , Html.map Msg.PreLogin endpointInput
+        , Html.text " (default is usually correct)"
+        ]
+    , Html.p []
+        [ Html.text "Username: "
+        , Html.map Msg.PreLogin usernameInput
+        ]
+    , Html.map Msg.PreLogin roomSpec
     , Html.p [] [ submitButton ]
     ]
 
@@ -488,16 +502,71 @@ viewChatting { folks, me, messageEntry, history } =
   Html.table []
     (inputRow :: List.map historyRow history)
 
+viewHelp : Html Msg
+viewHelp =
+  Html.div
+    []
+    [ Html.p
+        []
+        [ Html.strong [] [ Html.text "Basics: " ]
+        , Html.text """
+          Make moves by clicking on a starting square, once for right, twice for
+          down, then type the letters of your word, including any already on the
+          board. Press enter to submit. Blanks are placed with the space key.
+          The game doesn't know what letter they are, you will have to agree
+          that amongst yourselves in the chat. Press backspace to remove letters
+          from your word, and you can press escape to cancel an empty word, or
+          just click somewhere else to start a new one. Exchanging works very
+          similarly.
+          """
+        ]
+    , Html.p
+        []
+        [ Html.strong [] [ Html.text "Weirdnesses: " ]
+        , Html.text """
+          Any player can undo any move. There is no automatic dictionary
+          checking, and there's no explicit support for challenges: you can
+          emulate them with undo and pass. The game doesn't forbid players from
+          joining during the game, but it can have some weird results. You can
+          try undoing the move before they joined to kick them out again.
+          """
+        ]
+    ]
+
 view : Model.Model -> Html Msg
 view { error, state } =
   let
     title =
-      [ Html.text "skerrible | "
-      , Html.a
-          [ Attributes.href "https://github.com/bmillwood/skerrible" ]
-          [ Html.text "github" ]
-      , Html.hr [] []
-      ]
+      [ [ Html.text "skerrible | "
+        , Html.a
+            [ Attributes.href "https://github.com/bmillwood/skerrible" ]
+            [ Html.text "github" ]
+        ]
+      , case state of
+          Model.PreLogin _ -> []
+          Model.InGame { game } ->
+            let
+              setLink setTo =
+                Html.a
+                  [ Attributes.href "#"
+                  , Events.onClick (Ok (Msg.SetHelpVisible setTo))
+                  ]
+                  [ Html.text (
+                      if setTo then "show help" else "hide help"
+                    )
+                  ]
+            in
+            if game.showHelp
+            then
+              [ viewHelp
+              , Html.p [] [ setLink False ]
+              ]
+            else
+              [ Html.text " | "
+              , setLink True
+              ]
+      , [ Html.hr [] [] ]
+      ] |> List.concat
 
     errorDisplay =
       case error of
@@ -522,7 +591,7 @@ view { error, state } =
     stateDisplay =
       [ case state of
           Model.PreLogin preLogin ->
-            Html.map (Ok << Msg.PreLogin) (viewPreLogin preLogin)
+            Html.map Ok (viewPreLogin preLogin)
           Model.InGame { chat, game, roomCode } ->
             let
               remainingRack =

@@ -38,6 +38,7 @@ type OkMsg
   | ClearMoveError
   | SetTransientError (Maybe Model.TransientError)
   | BlurById String
+  | SetHelpVisible Bool
 
 doNothing : OkMsg
 doNothing = Many []

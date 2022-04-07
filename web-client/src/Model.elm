@@ -20,6 +20,7 @@ type alias Game =
   , proposal : Maybe Move.Proposal
   , moveError : Maybe Move.Error
   , transientError : Maybe TransientError
+  , showHelp : Bool
   }
 
 type alias Chat =
