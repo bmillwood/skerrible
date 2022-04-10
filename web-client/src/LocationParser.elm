@@ -3,6 +3,7 @@ module LocationParser exposing (..)
 import Dict
 import Json.Decode
 import Result
+import Tuple
 
 import Url
 import Url.Parser
@@ -33,12 +34,12 @@ defaults =
   , autoLogin = False
   }
 
-protocolWorkaround : { replaceWith : String } -> String -> String
+protocolWorkaround : { replaceWith : String } -> String -> (String, String)
 protocolWorkaround { replaceWith } url =
   case String.split ":" url of
-    [] -> url
+    [] -> ("", url)
     protocol :: _ ->
-      replaceWith ++ String.dropLeft (String.length protocol) url
+      (protocol, replaceWith ++ String.dropLeft (String.length protocol) url)
 
 parseLocation
   :  Json.Decode.Value
@@ -54,24 +55,34 @@ parseLocation flags =
       Json.Decode.decodeValue (Json.Decode.at ["location", "href"] Json.Decode.string) flags
       |> Result.mapError Json.Decode.errorToString
       |> Result.andThen (\href ->
-          Url.fromString (protocolWorkaround { replaceWith = "https" } href)
+          let
+            (originalProtocol, replaced) =
+              protocolWorkaround { replaceWith = "https" } href
+          in
+          Url.fromString replaced
           |> Result.fromMaybe ("Url parsing failed on: " ++ href)
+          |> Result.map (\url -> (originalProtocol, url))
         )
-      |> Result.andThen (\url ->
+      |> Result.andThen (\(originalProtocol, url) ->
           Url.Parser.parse (Url.Parser.query queryParser) { url | path = "" }
-          |> Maybe.map (\query -> (url, query))
+          |> Maybe.map (\query -> (originalProtocol, url, query))
           |> Result.fromMaybe ("Query parser failed on url: " ++ Url.toString url)
         )
   in
   case parsedUrl of
     Err msg ->
       { defaults | error = Just msg }
-    Ok (url, { username, room, autoLogin }) ->
+    Ok (originalProtocol, url, { username, room, autoLogin }) ->
       let
+        websocketProtocol =
+          if originalProtocol == "https"
+          then "wss"
+          else "ws"
         endpoint =
           { url | query = Nothing, fragment = Nothing }
           |> Url.toString
-          |> protocolWorkaround { replaceWith = "ws" }
+          |> protocolWorkaround { replaceWith = websocketProtocol }
+          |> Tuple.second
       in
       { defaults
       | username = Maybe.withDefault defaults.username username
