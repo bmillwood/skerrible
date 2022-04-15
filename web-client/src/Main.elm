@@ -184,6 +184,13 @@ update msg model =
             ( model, Cmd.none )
         Ok (Msg.SetTransientError newTransientError) ->
           ( setGame { game | transientError = newTransientError }, Cmd.none )
+        Ok (Msg.UpdateProposal proposalUpdate) ->
+          case game.proposal of
+            Nothing -> ( model, Cmd.none )
+            Just proposal ->
+              update
+                (Ok (updateProposal game.board game.rack proposal proposalUpdate))
+                model
         Ok (Msg.Propose proposal) ->
           ( setGame { game | proposal = proposal }, Cmd.none )
         Ok Msg.SendProposal ->
@@ -229,32 +236,31 @@ update msg model =
         Ok (Msg.SetHelpVisible showHelp) ->
           ( setGame { game | showHelp = showHelp }, Cmd.none )
 
-updateProposalWithKey : Board -> Board.Rack -> Move.Proposal -> Key -> Msg.OkMsg
-updateProposalWithKey board rack proposal key =
+updateProposal
+  : Board -> Board.Rack -> Move.Proposal -> Msg.ProposalUpdate -> Msg.OkMsg
+updateProposal board rack proposal proposalUpdate =
   let
-    backspace tiles = List.take (List.length tiles - 1) tiles
+    deleteLast tiles = List.take (List.length tiles - 1) tiles
     updateMove move = Msg.Propose (Just (Move.ProposeMove move))
     updateExchange newTiles = Msg.Propose (Just (Move.ProposeExchange newTiles))
-    addChar addTile c =
-      case Board.tileOfChar c of
-        Nothing -> Msg.doNothing
-        Just tile ->
-          if List.member tile (Move.remainingRack proposal rack)
-          then addTile tile
-          else Msg.SetTransientError (Just Model.RackError)
-    cancelProposal tiles =
+    ifHave tile addTile =
+      if List.member tile (Move.remainingRack proposal rack)
+      then addTile
+      else Msg.SetTransientError (Just Model.RackError)
+    cancelProposalIfEmpty tiles =
       if List.isEmpty tiles
       then Msg.Propose Nothing
       else Msg.doNothing
   in
-  case (proposal, key) of
-    (Move.ProposeMove move, Key.Backspace) ->
-      updateMove { move | tiles = backspace move.tiles }
-    (Move.ProposeExchange tiles, Key.Backspace) -> updateExchange (backspace tiles)
-    (_, Key.Enter) -> Msg.SendProposal
-    (Move.ProposeExchange tiles, Key.Char c) ->
-      addChar (\tile -> updateExchange (tiles ++ [tile])) c
-    (Move.ProposeMove move, Key.Char c) ->
+  case (proposal, proposalUpdate) of
+    (Move.ProposeMove move, Msg.UnproposeLast) ->
+      updateMove { move | tiles = deleteLast move.tiles }
+    (Move.ProposeExchange tiles, Msg.UnproposeLast) ->
+      updateExchange (deleteLast tiles)
+    (_, Msg.SubmitProposal) -> Msg.SendProposal
+    (Move.ProposeExchange tiles, Msg.ProposeTile tile) ->
+      ifHave tile (updateExchange (tiles ++ [tile]))
+    (Move.ProposeMove move, Msg.ProposeTile tile) ->
       let
         (i, j) = Move.nextPos move
         addTile moveTile = updateMove { move | tiles = move.tiles ++ [moveTile] }
@@ -263,39 +269,48 @@ updateProposalWithKey board rack proposal key =
         Nothing -> Msg.SetTransientError (Just Model.BoardError)
         Just sq ->
           case sq.tile of
-            Nothing -> addChar (\tile -> addTile (Move.PlaceTile tile)) c
-            Just tile ->
-              if Board.tileToChar tile == c
+            Nothing ->
+              ifHave tile (addTile (Move.PlaceTile tile))
+            Just squareTile ->
+              if tile == squareTile
               then addTile Move.UseBoard
               else Msg.SetTransientError (Just (Model.SquareError i j))
-    (Move.ProposeMove move, Key.Escape) ->
-      cancelProposal move.tiles
-    (Move.ProposeExchange tiles, Key.Escape) ->
-      cancelProposal tiles
-    (_, Key.Other) -> Msg.doNothing
+    (Move.ProposeMove move, Msg.CancelProposal) ->
+      cancelProposalIfEmpty move.tiles
+    (Move.ProposeExchange tiles, Msg.CancelProposal) ->
+      cancelProposalIfEmpty tiles
 
-handleKey : Model.Game -> Json.Decode.Decoder Msg.OkMsg
-handleKey game =
-  case game.proposal of
-    Nothing -> Json.Decode.succeed Msg.doNothing
-    Just proposal ->
-      Json.Decode.map
-        (updateProposalWithKey game.board game.rack proposal)
-        Key.decodeKey
+handleKey : Json.Decode.Decoder Msg.OkMsg
+handleKey =
+  let
+    ofKey key =
+      case key of
+        Key.Escape -> Msg.UpdateProposal Msg.CancelProposal
+        Key.Enter -> Msg.UpdateProposal Msg.SubmitProposal
+        Key.Backspace -> Msg.UpdateProposal Msg.UnproposeLast
+        Key.Char c ->
+          case Board.tileOfChar c of
+            Nothing -> Msg.doNothing
+            Just tile -> Msg.UpdateProposal (Msg.ProposeTile tile)
+        Key.Other -> Msg.doNothing
+  in
+  Json.Decode.map ofKey Key.decodeKey
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
   let
-    ifPlaying decoderOfGame =
+    ifPlaying decoder =
       case model.state of
         Model.PreLogin _ -> Json.Decode.succeed (Ok Msg.doNothing)
-        Model.InGame { game } -> Json.Decode.map Ok (decoderOfGame game)
+        Model.InGame _ -> Json.Decode.map Ok decoder
+    clearError = ifPlaying (Json.Decode.succeed (Msg.SetTransientError Nothing))
   in
   Sub.batch
     [ Ports.subscriptions model
     , Browser.Events.onKeyDown (ifPlaying handleKey)
-    , Browser.Events.onKeyUp
-        (ifPlaying (\_ -> Json.Decode.succeed (Msg.SetTransientError Nothing)))
+    , Browser.Events.onKeyUp clearError
+    , Browser.Events.onMouseUp clearError
+    , Browser.Events.onVisibilityChange (\_ -> Ok (Msg.SetTransientError Nothing))
     ]
 
 main =

@@ -15,6 +15,12 @@ type LoginFormMsg
   | Connected
   | Failed String
 
+type ProposalUpdate
+  = ProposeTile Board.Tile
+  | UnproposeLast
+  | CancelProposal
+  | SubmitProposal
+
 type OkMsg
   = Many (List OkMsg)
   | ClearError
@@ -29,6 +35,7 @@ type OkMsg
   | UpdateTileData (DictTile Board.TileData)
   | UpdateRack Board.Rack
   | ShuffleRack (Maybe (List Int))
+  | UpdateProposal ProposalUpdate
   | Propose (Maybe Move.Proposal)
   | SendProposal
   | SendPass

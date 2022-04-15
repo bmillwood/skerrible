@@ -179,21 +179,17 @@ viewPreLogin { loginState, loginForm } =
     , Html.p [] [ submitButton ]
     ]
 
-tileStyle : List (Html.Attribute msg)
-tileStyle =
+squareStyle =
   [ Attributes.style "width" "1.8em"
   , Attributes.style "height" "1.8em"
   , Attributes.style "text-align" "center"
   ]
 
-tileColor : String
-tileColor = "beige"
-
 viewTile
   :  Board.Tile
   -> DictTile Board.TileData
   -> { partOfMove : Bool, error : Bool }
-  -> Html msg
+  -> Html Msg.OkMsg
 viewTile tile tileData { partOfMove, error } =
   let
     scoreDisplay =
@@ -202,9 +198,10 @@ viewTile tile tileData { partOfMove, error } =
         Just { score } -> String.fromInt score
     attributes =
       [ Attributes.style "color" (if partOfMove then "red" else "black")
-      , Attributes.style "background-color" (if error then "red" else tileColor)
+      , Attributes.style "background-color" (if error then "red" else "beige")
       , Attributes.style "position" "relative"
-      ] ++ tileStyle
+      , Events.onClick (Msg.UpdateProposal (Msg.ProposeTile tile))
+      ] ++ squareStyle
   in
   Html.td
     attributes
@@ -273,7 +270,7 @@ viewBoard { board, tileData, proposedMove, transientError } =
                         Just Move.Down -> Msg.Propose Nothing
               )
             ]
-          , tileStyle
+          , squareStyle
           ] |> List.concat
         tile =
           case placed of
@@ -289,7 +286,9 @@ viewBoard { board, tileData, proposedMove, transientError } =
             Just Move.Down -> '↓'
       in
       case tile of
-        Just t -> viewTile t tileData { partOfMove = isJust placed, error = errorHere }
+        Just t ->
+          viewTile t tileData
+            { partOfMove = isJust placed, error = errorHere }
         Nothing -> Html.td attributes [ Html.text (String.fromChar char) ]
     rowNumCell n = Html.th [ Attributes.scope "row" ] [ Html.text (String.fromInt (n + 1)) ]
     tableRow rowIx row =
@@ -388,46 +387,58 @@ viewRack { rack, tileData, proposedExchange, rackError } =
   in
   Html.div
     []
-    [ Html.table
-        [ Attributes.style "border" "1px solid black"
-        , Attributes.style "background-color" (if rackError then "red" else "green")
-        , -- since tds are 1.8em, it seems like this should be 1.8 * 7 = 12.6em, but
-          -- it seems like we need to compensate for padding and margin as well
-          -- plus the "real" racks have a bit of extra space in them anyway
-          Attributes.style "width" "17em"
-        , Attributes.style "min-height" "1.8em"
+    [ Html.p
+        []
+        [ Html.table
+            [ Attributes.style "border" "1px solid black"
+            , Attributes.style "background-color" (if rackError then "red" else "green")
+            , -- since tds are 1.8em, it seems like this should be 1.8 * 7 = 12.6em,
+              -- but it seems like we need to compensate for padding and margin as well
+              -- plus the "real" racks have a bit of extra space in them anyway
+              Attributes.style "width" "17em"
+            , Attributes.style "min-height" "1.8em"
+            ]
+            [ Html.tr [] (List.map rackTile rack ++ [ spaceTd ]) ]
+        , Html.button
+            [ Events.onClick (Msg.UpdateProposal Msg.UnproposeLast) ]
+            [ Html.text "\u{232b} Backspace" ]
+        , Html.button
+            [ Events.onClick (Msg.UpdateProposal Msg.SubmitProposal) ]
+            [ Html.text "\u{21b5} Submit" ]
         ]
-        [ Html.tr [] (List.map rackTile rack ++ [ spaceTd ]) ]
-    , Html.button
-        [ Events.onClick (Msg.ShuffleRack Nothing) ]
-        [ Html.text "\u{1f500} Rearrange" ]
-    , let
-        id = "exchangeButton"
-      in
-      Html.button
-        [ Attributes.id id
-        , Events.onClick (
-            Msg.Many
-              [ Msg.Propose (Just (Move.ProposeExchange []))
-              , -- if I don't do this the keypresses don't reach the global handler
-                Msg.BlurById id
-              ]
-          )
-        , Attributes.disabled
-          <| case proposedExchange of
-            Nothing -> False
-            Just _ -> True
+    , Html.p
+        []
+        [ Html.button
+            [ Events.onClick (Msg.ShuffleRack Nothing) ]
+            [ Html.text "\u{1f500} Rearrange" ]
+        , let
+            id = "exchangeButton"
+          in
+          Html.button
+            [ Attributes.id id
+            , Events.onClick (
+                Msg.Many
+                  [ Msg.Propose (Just (Move.ProposeExchange []))
+                  , -- if I don't do this the keypresses don't reach the global handler
+                    Msg.BlurById id
+                  ]
+              )
+            , Attributes.disabled
+              <| case proposedExchange of
+                Nothing -> False
+                Just _ -> True
+            ]
+            [ Html.text "\u{1f5d1} "
+            , Html.text
+              <| case proposedExchange of
+                Nothing -> "Exchange"
+                Just tiles ->
+                  "Exchanging " ++ String.fromList (List.map Board.tileToChar tiles)
+            ]
+        , Html.button
+            [ Events.onClick Msg.SendPass ]
+            [ Html.text "\u{1f937} Pass" ]
         ]
-        [ Html.text "\u{1f5d1} "
-        , Html.text
-          <| case proposedExchange of
-            Nothing -> "Exchange"
-            Just tiles ->
-              "Exchanging " ++ String.fromList (List.map Board.tileToChar tiles)
-        ]
-    , Html.button
-        [ Events.onClick Msg.SendPass ]
-        [ Html.text "\u{1f937} Pass" ]
     ]
 
 viewChatting : Model.ChattingState -> Html Msg.OkMsg
