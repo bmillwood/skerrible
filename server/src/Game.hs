@@ -189,7 +189,11 @@ data PlayerState =
   PlayerState
     { rack :: Rack
     , score :: Integer
+    , consecutivePasses :: Integer
     }
+
+newPlayer :: PlayerState
+newPlayer = PlayerState{ rack = Rack [], score = 0, consecutivePasses = 0 }
 
 data TurnState
   = NoTurns
@@ -312,8 +316,7 @@ addPlayerIfAbsent username = updatePlayer add username
       , Just p
       )
       where
-        (nextGame@GameState{ turns }, p)
-          = fillPlayerRack game PlayerState{ rack = Rack [], score = 0 }
+        (nextGame@GameState{ turns }, p) = fillPlayerRack game newPlayer
     add game (Just p) = (game, Just p)
 
 takeFrom :: (Eq a) => [a] -> [a] -> Either (NonEmpty a) [a]
@@ -340,20 +343,21 @@ removeFromPlayerRack tiles username players = do
         Left missing -> Left (YouDoNotHave missing)
         Right remaining -> Right (Just pst{ rack = Rack remaining })
 
-applyGameEnd :: GameState -> Maybe GameState
-applyGameEnd game@GameState{ players }
-  | any (\PlayerState{ rack = Rack tiles } -> null tiles) players =
-      Just game
-        { players = Map.map updateScoreFor players
-        , gameOver = True
-        }
-  | otherwise = Nothing
+applyGameEnd :: GameState -> GameState
+applyGameEnd game@GameState{ players } =
+  game{ gameOver = True, players = Map.map updateScoreFor players }
   where
     rackScore PlayerState{ rack = Rack tiles } = sum (map getTileScore tiles)
     unplayedTileScore = sum (Map.map rackScore players)
     updateScoreFor pst@PlayerState{ rack = Rack tiles, score }
       | null tiles = pst{ score = score + unplayedTileScore }
       | otherwise = pst{ score = score - rackScore pst }
+
+endIfAnyRackEmpty :: GameState -> GameState
+endIfAnyRackEmpty game@GameState{ players }
+  | any (\PlayerState{ rack = Rack tiles } -> null tiles) players =
+    applyGameEnd game
+  | otherwise = game
 
 advanceTurns :: Username -> TurnState -> Either MoveError TurnState
 advanceTurns _ NoTurns = Right NoTurns
@@ -374,6 +378,13 @@ advanceTurns username Turns{ prevMover, mustFollow, notMovedYet } =
         , mustFollow = newFollow
         , notMovedYet = Set.delete username notMovedYet
         }
+
+updatePassCountWith :: Username -> (Integer -> Integer) -> GameState -> GameState
+updatePassCountWith username f state@GameState{ players } =
+  state{ players = Map.update updatePassCount username players }
+  where
+    updatePassCount p@PlayerState{ consecutivePasses } =
+      Just p{ consecutivePasses = f consecutivePasses }
 
 applyMove :: Username -> Move -> GameState -> Either MoveError (GameState, MoveReport)
 applyMove _ _ GameState{ gameOver = True } = Left GameIsOver
@@ -397,7 +408,9 @@ applyMove
         username
         unrackedPlayers
   return
-    ( fillRack username
+    ( endIfAnyRackEmpty
+      $ fillRack username
+      $ updatePassCountWith username (const 0)
         game{ board = nextBoard, players = newPlayers, turns = nextTurns }
     , PlayedWord{ moveWords, moveScore }
     )
@@ -422,6 +435,7 @@ applyExchange username tilesNE game@GameState{ players, turns } = do
   Right
     ( returnToBag tiles
       $ fillRack username
+      $ updatePassCountWith username (const 0)
       $ game{ players = nextPlayers, turns = nextTurns }
     , Exchanged (toInteger $ length tiles)
     )
@@ -429,7 +443,14 @@ applyExchange username tilesNE game@GameState{ players, turns } = do
 applyPass :: Username -> GameState -> Either MoveError (GameState, MoveReport)
 applyPass username game@GameState{ turns } = do
   nextTurns <- advanceTurns username turns
-  Right ( game{ turns = nextTurns }, Passed )
+  let
+    nextGame@GameState{ players } =
+      updatePassCountWith username (+1) game{ turns = nextTurns }
+    finalGame
+      | all (>= 2) [c | PlayerState{ consecutivePasses = c } <- Map.elems players]
+        = applyGameEnd nextGame
+      | otherwise = nextGame
+  Right ( finalGame, Passed )
 
 tileData :: Map Tile TileData
 tileData =

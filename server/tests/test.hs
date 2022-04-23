@@ -81,19 +81,37 @@ moveScores moves = TestList finalTests
 testGameEnd :: Test
 testGameEnd =
   TestList
-    [ TestCase $ assertEqual "game not already ended" False (gameOver gameBeforeEnd)
-    , TestCase $ assertEqual "then game ended" (Just True) (gameOver <$> gameEnded)
-    , TestCase $ assertEqual "scores post-end"
-        [ ( u "ae", 3 )
-        , ( u "blank", 5 )
-        , ( u "q", -5 )
-        , ( u "winner", 17 )
-        ]
-        (maybe [] Map.toList (scores <$> gameEnded))
+    [ "by rack exhaustion" ~:
+        TestList
+          [ TestCase
+              $ assertEqual "game not already ended" False (gameOver gameBeforeEnd)
+          , TestCase
+              $ assertEqual "then game ended" True (gameOver gameEndedByRackExhaustion)
+          , TestCase $ assertEqual "scores post-end"
+              [ ( u "ae", 3 )
+              , ( u "blank", 5 )
+              , ( u "q", -5 )
+              , ( u "winner", 17 )
+              ]
+              (Map.toList (scores gameEndedByRackExhaustion))
+          ]
+    , "by passes" ~:
+        TestList
+        . snd
+        $ foldl tryPass ( gameBeforeEnd, [] )
+          [ ( u "q", False )
+          , ( u "ae", False )
+          , ( u "blank", False )
+          , ( u "winner", False )
+          , ( u "q", False )
+          , ( u "ae", False )
+          , ( u "blank", False )
+          , ( u "winner", True )
+          ]
     ]
   where
     u = Username . fromString
-    playersWithRacks = Map.map (\rack -> PlayerState{ score = 5, rack }) . Map.fromList
+    playersWithRacks = Map.map (\rack -> newPlayer{ score = 5, rack }) . Map.fromList
     gameBeforeEnd =
       testGameState
         { players =
@@ -101,10 +119,22 @@ testGameEnd =
               [ (u "q", Rack [ Letter 'Q' ])
               , (u "ae", Rack [ Letter 'A', Letter 'E' ])
               , (u "blank", Rack [ Blank ])
-              , (u "winner", Rack [])
+              , (u "winner", Rack [ Blank, Blank ])
               ]
+        , bag = Map.empty
         }
-    gameEnded = applyGameEnd gameBeforeEnd
+    Right (gameEndedByRackExhaustion, _) =
+      applyMove
+        (u "winner")
+        (Move (Pos 8 8) MoveRight (moveTiles "  "))
+        gameBeforeEnd
+    tryPass (game, tests) (username, thenEnds) =
+      case applyPass username game of
+        Left passError -> (game, TestCase (assertFailure (show passError)) : tests)
+        Right (nextGame, _) ->
+          ( nextGame
+          , TestCase (assertEqual "game end" thenEnds (gameOver nextGame)) : tests
+          )
 
 main :: IO ()
 main = runTestTTAndExit $ TestList
