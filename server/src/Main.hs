@@ -267,7 +267,7 @@ playerRead roomState@RoomState{ roomCode } conn username = forever $ do
     doMove applyToGame =
       modifyGame CanUndo roomState $ \game ->
         case applyToGame game of
-          Right (nextGame@GameState{ board, players }, moveReport) -> do
+          Right (moveReport, nextGame@GameState{ board, players }) -> do
             sendToClient roomState username (MoveResult (Right ()))
             case Map.lookup username players of
               Nothing -> print (roomCode, "sendRack: player missing", username)

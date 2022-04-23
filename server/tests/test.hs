@@ -123,7 +123,7 @@ testGameEnd =
               ]
         , bag = Map.empty
         }
-    Right (gameEndedByRackExhaustion, _) =
+    Right (_, gameEndedByRackExhaustion) =
       applyMove
         (u "winner")
         (Move (Pos 8 8) MoveRight (moveTiles "  "))
@@ -131,7 +131,7 @@ testGameEnd =
     tryPass (game, tests) (username, thenEnds) =
       case applyPass username game of
         Left passError -> (game, TestCase (assertFailure (show passError)) : tests)
-        Right (nextGame, _) ->
+        Right (_, nextGame) ->
           ( nextGame
           , TestCase (assertEqual "game end" thenEnds (gameOver nextGame)) : tests
           )
