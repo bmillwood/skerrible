@@ -200,7 +200,7 @@ viewTile tile tileData { partOfMove, error } =
       [ Attributes.style "color" (if partOfMove then "red" else "black")
       , Attributes.style "background-color" (if error then "red" else "beige")
       , Attributes.style "position" "relative"
-      , Events.onClick (Msg.UpdateProposal (Msg.ProposeTile tile))
+      , Events.onMouseDown (Msg.UpdateProposal (Msg.ProposeTile tile))
       ] ++ squareStyle
   in
   Html.td
