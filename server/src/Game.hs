@@ -1,7 +1,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 module Game where
 
-import Control.Monad (foldM)
+import Control.Monad (foldM, when)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
 import qualified Data.List.NonEmpty as NonEmpty
@@ -381,6 +381,13 @@ advanceTurns username Turns{ prevMover, mustFollow, notMovedYet } =
         , notMovedYet = Set.delete username notMovedYet
         }
 
+takeTurn :: Username -> StateT GameState (Either MoveError) ()
+takeTurn username = do
+  game@GameState{ gameOver, turns } <- get
+  when gameOver $ lift $ Left GameIsOver
+  nextTurns <- lift $ advanceTurns username turns
+  put game{ turns = nextTurns }
+
 updatePassCountWith :: Username -> (Integer -> Integer) -> GameState -> GameState
 updatePassCountWith username f game@GameState{ players } =
   game{ players = Map.update updatePassCount username players }
@@ -393,11 +400,8 @@ applyMove
   username
   move@Move{ tiles = moveTiles }
   = runStateT $ do
-  game@GameState{ board, gameOver, turns, players } <- get
-  if gameOver
-    then lift $ Left GameIsOver
-    else return ()
-  nextTurns <- lift $ advanceTurns username turns
+  game@GameState{ board, players } <- get
+  takeTurn username
   tiles <-
     lift $ case [tile | PlaceTile tile <- moveTiles] of
       [] -> Left NoPlacedTiles
@@ -415,7 +419,7 @@ applyMove
     $ endIfAnyRackEmpty
     $ fillRack username
     $ updatePassCountWith username (const 0)
-      game{ board = nextBoard, players = newPlayers, turns = nextTurns }
+      game{ board = nextBoard, players = newPlayers }
   return PlayedWord{ moveWords, moveScore }
 
 returnToBag :: [Tile] -> GameState -> GameState
@@ -430,27 +434,26 @@ applyExchange
   -> GameState
   -> Either MoveError (MoveReport, GameState)
 applyExchange username tilesNE = runStateT $ do
-  game@GameState{ bag, players, turns } <- get
+  game@GameState{ bag, players } <- get
+  takeTurn username
   lift $ if toInteger (length tilesNE) > sum bag
     then Left NotEnoughTilesToExchange
     else Right ()
   let tiles = NonEmpty.toList tilesNE
-  nextTurns <- lift $ advanceTurns username turns
   nextPlayers <- lift $ removeFromPlayerRack tiles username players
   put
     $ returnToBag tiles
     $ fillRack username
     $ updatePassCountWith username (const 0)
-    $ game{ players = nextPlayers, turns = nextTurns }
+    $ game{ players = nextPlayers }
   return $ Exchanged (toInteger $ length tiles)
 
 applyPass :: Username -> GameState -> Either MoveError (MoveReport, GameState)
 applyPass username = runStateT $ do
-  game@GameState{ turns } <- get
-  nextTurns <- lift $ advanceTurns username turns
+  game <- get
+  takeTurn username
   let
-    nextGame@GameState{ players } =
-      updatePassCountWith username (+1) game{ turns = nextTurns }
+    nextGame@GameState{ players } = updatePassCountWith username (+1) game
     finalGame
       | all (>= 2) [c | PlayerState{ consecutivePasses = c } <- Map.elems players]
         = applyGameEnd nextGame
