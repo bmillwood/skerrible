@@ -396,25 +396,22 @@ updatePassCountWith username f game@GameState{ players } =
       Just p{ consecutivePasses = f consecutivePasses }
 
 applyMove :: Username -> Move -> GameState -> Either MoveError (MoveReport, GameState)
-applyMove
-  username
-  move@Move{ tiles = moveTiles }
-  = runStateT $ do
-  game@GameState{ board, players } <- get
+applyMove username move@Move{ tiles = moveTiles } = runStateT $ do
   takeTurn username
   tiles <-
     lift $ case [tile | PlaceTile tile <- moveTiles] of
       [] -> Left NoPlacedTiles
       tiles -> Right tiles
+  game@GameState{ board, players } <- get
   unrackedPlayers <- lift $ removeFromPlayerRack tiles username players
-  nextBoard <- lift $ applyMoveToBoard move board
   let
-    (moveWords, moveScore) = scoreMove move board -- not nextBoard
+    (moveWords, moveScore) = scoreMove move board
     newPlayers =
       Map.adjust
         (\pst@PlayerState{ score } -> pst{ score = score + moveScore })
         username
         unrackedPlayers
+  nextBoard <- lift $ applyMoveToBoard move board
   put
     $ endIfAnyRackEmpty
     $ fillRack username
@@ -434,11 +431,10 @@ applyExchange
   -> GameState
   -> Either MoveError (MoveReport, GameState)
 applyExchange username tilesNE = runStateT $ do
-  game@GameState{ bag, players } <- get
   takeTurn username
-  lift $ if toInteger (length tilesNE) > sum bag
-    then Left NotEnoughTilesToExchange
-    else Right ()
+  game@GameState{ bag, players } <- get
+  when (toInteger (length tilesNE) > sum bag)
+    $ lift $ Left NotEnoughTilesToExchange
   let tiles = NonEmpty.toList tilesNE
   nextPlayers <- lift $ removeFromPlayerRack tiles username players
   put
@@ -450,15 +446,12 @@ applyExchange username tilesNE = runStateT $ do
 
 applyPass :: Username -> GameState -> Either MoveError (MoveReport, GameState)
 applyPass username = runStateT $ do
-  game <- get
   takeTurn username
-  let
-    nextGame@GameState{ players } = updatePassCountWith username (+1) game
-    finalGame
-      | all (>= 2) [c | PlayerState{ consecutivePasses = c } <- Map.elems players]
-        = applyGameEnd nextGame
-      | otherwise = nextGame
-  put finalGame
+  modify $ updatePassCountWith username (+1)
+  GameState{ players } <- get
+  when
+    (all (>= 2) [c | PlayerState{ consecutivePasses = c } <- Map.elems players])
+    $ modify applyGameEnd
   return Passed
 
 tileData :: Map Tile TileData
