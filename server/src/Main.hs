@@ -27,8 +27,8 @@ import qualified Network.WebSockets as WS
 import Game
 import Protocol
 
-data RoomState =
-  RoomState
+data RoomState
+  = RoomState
     { gameStore :: MVar Game
     , roomCode :: RoomCode
     , clients :: MVar (Map Username (Integer, Chan ToClient))

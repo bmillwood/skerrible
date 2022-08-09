@@ -187,8 +187,8 @@ scoreMove move@Move{ tiles } board@(Board boardMap) =
                   (placedPositionsForMove oneMove)
             ]
 
-data PlayerState =
-  PlayerState
+data PlayerState
+  = PlayerState
     { rack :: Rack
     , score :: Integer
     , consecutivePasses :: Integer
@@ -205,8 +205,8 @@ data TurnState
       , notMovedYet :: Set Username
       }
 
-data GameState =
-  GameState
+data GameState
+  = GameState
     { players :: Map Username PlayerState
     , turns :: TurnState
     , board :: Board

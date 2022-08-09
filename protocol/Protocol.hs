@@ -23,11 +23,12 @@ instance Aeson.ToJSON Tile
 instance Aeson.FromJSONKey Tile
 instance Aeson.ToJSONKey Tile
 
-data TileData =
-  TileData
+data TileData
+  = TileData
     { tileScore :: Integer
     , tileCount :: Integer
-    } deriving (Generic, Show)
+    }
+  deriving (Generic, Show)
 
 instance Aeson.FromJSON TileData
 instance Aeson.ToJSON TileData
@@ -38,12 +39,13 @@ newtype Rack = Rack [Tile]
 instance Aeson.FromJSON Rack
 instance Aeson.ToJSON Rack
 
-data Square =
-  Square
+data Square
+  = Square
     { letterMult :: Integer
     , wordMult :: Integer
     , squareTile :: Maybe Tile
-    } deriving (Generic, Show)
+    }
+  deriving (Generic, Show)
 
 instance Aeson.FromJSON Square
 instance Aeson.ToJSON Square
@@ -80,8 +82,8 @@ data MoveTile
 instance Aeson.FromJSON MoveTile
 instance Aeson.ToJSON MoveTile
 
-data Move =
-  Move
+data Move
+  = Move
     { startPos :: Pos
     , direction :: MoveDirection
     , tiles :: [MoveTile]
@@ -131,8 +133,8 @@ data TurnEnforcement
 instance Aeson.FromJSON TurnEnforcement
 instance Aeson.ToJSON TurnEnforcement
 
-data RoomSettings =
-  RoomSettings
+data RoomSettings
+  = RoomSettings
     { noBoardMultipliers :: Bool
     , turnEnforcement :: TurnEnforcement
     }
@@ -186,9 +188,9 @@ instance Aeson.ToJSON FromClient
 
 data MoveReport
   = PlayedWord
-      { moveWords :: [String]
-      , moveScore :: Integer
-      }
+    { moveWords :: [String]
+    , moveScore :: Integer
+    }
   | Exchanged Integer
   | Passed
   | Undone
