@@ -8,7 +8,7 @@ killGrandchild() {
 while sleep 1
 do
   inotifywait --quiet -e modify -e delete protocol server/{src,tests} &
-  if cabal build
+  if cabal build "$@"
   then
     cabal run skerrible-server -- static-root &
     cabal test
