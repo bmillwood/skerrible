@@ -27,11 +27,17 @@ import qualified Network.WebSockets as WS
 import Game
 import Protocol
 
+data Client
+  = Client
+    { connectionCount :: Integer
+    , ear :: Chan ToClient
+    }
+
 data RoomState
   = RoomState
     { gameStore :: MVar Game
     , roomCode :: RoomCode
-    , clients :: MVar (Map Username (Integer, Chan ToClient))
+    , clients :: MVar (Map Username Client)
     , setStale :: Bool -> IO ()
     }
 
@@ -71,7 +77,7 @@ broadcast :: RoomState -> ToClient -> IO ()
 broadcast RoomState{ clients, roomCode } msg = do
   print (roomCode, "broadcast", msg)
   withMVar clients $ \clientMap ->
-    mapM_ (\(_, chan) -> writeChan chan msg) clientMap
+    mapM_ (\Client{ ear } -> writeChan ear msg) clientMap
 
 warpSettings :: IO Warp.Settings
 warpSettings = do
@@ -120,7 +126,7 @@ sendToClient RoomState{ clients, roomCode } username msg =
   withMVar clients $ \clientsMap ->
     case Map.lookup username clientsMap of
       Nothing -> print (roomCode, "sendToClient: no client", username)
-      Just (_, chan) -> writeChan chan msg
+      Just Client{ ear } -> writeChan ear msg
 
 readFromClient :: WS.Connection -> IO (Maybe FromClient)
 readFromClient conn = do
@@ -208,34 +214,34 @@ applyUndo roomState@RoomState{ gameStore } username = do
 
 newtype IOAnd c a = IOAnd { runIOAnd :: IO (c, a) } deriving (Functor)
 
-addClient :: Maybe (Integer, Chan ToClient) -> IOAnd (Chan ToClient) (Maybe (Integer, Chan ToClient))
+addClient :: Maybe Client -> IOAnd (Chan ToClient) (Maybe Client)
 addClient Nothing = IOAnd $ do
-  c <- newChan
-  return (c, Just (1, c))
-addClient (Just (n, c)) = IOAnd $ do
-  newC <- dupChan c
-  return (newC, Just (n + 1, c))
+  ear <- newChan
+  return (ear, Just Client{ connectionCount = 1, ear })
+addClient (Just Client{ connectionCount = n, ear = oldEar }) = IOAnd $ do
+  newEar <- dupChan oldEar
+  return (newEar, Just Client{ connectionCount = n + 1, ear = newEar })
 
-removeClient :: Maybe (Integer, Chan ToClient) -> Maybe (Integer, Chan ToClient)
+removeClient :: Maybe Client -> Maybe Client
 removeClient Nothing = Nothing
-removeClient (Just (n, c))
+removeClient (Just Client{ connectionCount = n, ear })
   | n <= 1 = Nothing
-  | otherwise = Just (n - 1, c)
+  | otherwise = Just Client{ connectionCount = n - 1, ear }
 
 joinedRoom :: RoomState -> WS.Connection -> Username -> IO ()
 joinedRoom state@RoomState{ clients, roomCode, setStale } conn username = do
   setStale False
   sendToConn conn (UpdateRoomCode roomCode)
-  toClientChan <- modifyMVar clients $ \clientMap -> do
-    (chan, newClients) <- runIOAnd (Map.alterF addClient username clientMap)
-    return (newClients, chan)
+  clientEar <- modifyMVar clients $ \clientMap -> do
+    (ear, newClients) <- runIOAnd (Map.alterF addClient username clientMap)
+    return (newClients, ear)
   modifyGame CannotUndo state $ \gameState -> do
     let withPlayer = addPlayerIfAbsent username gameState
     broadcast state (Scores (scores withPlayer))
     return (withPlayer, ())
   (readDoesNotReturn, neitherDoesWrite) <- concurrently
     (playerRead state conn username)
-    (writeThread state toClientChan conn username)
+    (writeThread state clientEar conn username)
     `onException` do
       modifyMVar_ clients $ \clientMap -> do
         print (roomCode, "disconnected", username)
