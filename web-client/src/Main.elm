@@ -123,7 +123,8 @@ update msg model =
               )
             Msg.Failed error ->
               failed error
-        Ok other -> failed "Ingame-only message outside of game"
+        Ok other ->
+          failed ("Ingame-only message outside of game: " ++ Debug.toString other)
     Model.InGame ({ chat, game } as inGame) ->
       let
         setChat newChat = { model | state = Model.InGame { inGame | chat = newChat } }
