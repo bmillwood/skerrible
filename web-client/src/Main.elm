@@ -311,7 +311,11 @@ subscriptions model =
     , Browser.Events.onKeyDown (ifPlaying handleKey)
     , Browser.Events.onKeyUp clearError
     , Browser.Events.onMouseUp clearError
-    , Browser.Events.onVisibilityChange (\_ -> Ok (Msg.SetTransientError Nothing))
+    , Browser.Events.onVisibilityChange (\_ ->
+          case model.state of
+            Model.PreLogin _ -> Ok Msg.doNothing
+            Model.InGame _ -> Ok (Msg.SetTransientError Nothing)
+        )
     ]
 
 main =
