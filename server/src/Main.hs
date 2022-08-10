@@ -38,19 +38,24 @@ data Client
 
 data RoomState
   = RoomState
-    { gameStore :: MVar Game
-    , roomCode :: RoomCode
-    , clients :: MVar (Map Username Client)
+    { game :: Game
+    , clients :: Map Username Client
+    }
+
+data Room
+  = Room
+    { roomCode :: RoomCode
+    , roomState :: MVar RoomState
     , setStale :: Bool -> IO ()
     }
 
-newRoomState :: RoomCode -> RoomSettings -> (Bool -> IO ()) -> IO RoomState
-newRoomState roomCode roomSettings setStale = do
-  gameStore <- newMVar =<< createGame roomSettings <$> Random.newStdGen
-  clients <- newMVar Map.empty
-  return RoomState{ gameStore, roomCode, clients, setStale }
+newRoom :: RoomCode -> RoomSettings -> (Bool -> IO ()) -> IO Room
+newRoom roomCode roomSettings setStale = do
+  game <- createGame roomSettings <$> Random.newStdGen
+  roomState <- newMVar RoomState{ game, clients = Map.empty }
+  return Room{ roomCode, roomState, setStale }
 
-data ServerState = ServerState (MVar (Map RoomCode RoomState))
+data ServerState = ServerState (MVar (Map RoomCode Room))
 
 newServerState :: IO ServerState
 newServerState = ServerState <$> newMVar Map.empty
@@ -76,11 +81,10 @@ staleSetter code (ServerState roomMapVar) = do
           return (Just newCollector)
         else return Nothing
 
-broadcast :: RoomState -> ToClient -> IO ()
-broadcast RoomState{ clients, roomCode } msg = do
+broadcast :: RoomCode -> Map Username Client -> ToClient -> IO ()
+broadcast roomCode clients msg = do
   print (roomCode, "broadcast", msg)
-  withMVar clients $ \clientMap ->
-    mapM_ (\Client{ ear } -> writeChan ear msg) clientMap
+  mapM_ (\Client{ ear } -> writeChan ear msg) clients
 
 warpSettings :: IO Warp.Settings
 warpSettings = do
@@ -124,12 +128,11 @@ sendToConn :: WS.Connection -> ToClient -> IO ()
 sendToConn conn msg = do
   WS.sendTextData conn (Aeson.encode msg)
 
-sendToClient :: RoomState -> Username -> ToClient -> IO ()
-sendToClient RoomState{ clients, roomCode } username msg =
-  withMVar clients $ \clientsMap ->
-    case Map.lookup username clientsMap of
-      Nothing -> print (roomCode, "sendToClient: no client", username)
-      Just Client{ ear } -> writeChan ear msg
+sendToClient :: RoomCode -> Map Username Client -> Username -> ToClient -> IO ()
+sendToClient roomCode clients username msg =
+  case Map.lookup username clients of
+    Nothing -> print (roomCode, "sendToClient: no client", username)
+    Just Client{ ear } -> writeChan ear msg
 
 readFromClient :: WS.Connection -> IO (Maybe FromClient)
 readFromClient conn = do
@@ -168,7 +171,7 @@ handleConnection state@(ServerState roomsVar) conn = do
                   MakeNewRoom roomSettings -> do
                     code <- unusedRoomCode 4
                     setStale <- staleSetter code state
-                    room <- newRoomState code roomSettings setStale
+                    room <- newRoom code roomSettings setStale
                     return
                       ( Map.insert code room rooms
                       , joinedRoom room conn loginRequestName
@@ -201,11 +204,11 @@ getMessages (Endo k) = k []
 
 modifyGame
   :: Undoable
-  -> RoomState
+  -> Room
   -> (GameState -> Writer (Endo [Message]) (GameState, a))
   -> IO a
-modifyGame undoable roomState@RoomState{ gameStore, roomCode } change = do
-  modifyMVar gameStore $ \game -> do
+modifyGame undoable Room{ roomCode, roomState } change = do
+  modifyMVar roomState $ \state@RoomState{ clients, game } -> do
     let
       ((nextState, result), messages) = runWriter (change (latestState game))
       apply = case undoable of
@@ -213,27 +216,28 @@ modifyGame undoable roomState@RoomState{ gameStore, roomCode } change = do
         CannotUndo -> setLatestState
     forM_ (getMessages messages) $ \case
       Server s -> print (roomCode, s)
-      Targeted u tc -> sendToClient roomState u tc
-      Broadcast tc -> broadcast roomState tc
-    return (apply nextState game, result)
+      Targeted u tc -> sendToClient roomCode clients u tc
+      Broadcast tc -> broadcast roomCode clients tc
+    return (state{ game = apply nextState game }, result)
 
-applyUndo :: RoomState -> Username -> IO ()
-applyUndo roomState@RoomState{ gameStore } username = do
-  modifyMVar_ gameStore $ \game ->
+applyUndo :: Room -> Username -> IO ()
+applyUndo Room{ roomCode, roomState } username = do
+  modifyMVar_ roomState $ \state@RoomState{ clients, game } ->
     case undo game of
       Nothing -> do
-        return game
+        return state
       Just undone -> do
         let latest@GameState{ board = uBoard, players = uPlayers } = latestState undone
         ifor_ uPlayers $ \uName PlayerState{ rack } ->
-          sendToClient roomState uName (UpdateRack rack)
-        mapM_ (broadcast roomState)
+          sendToClient roomCode clients uName (UpdateRack rack)
+        mapM_ (broadcast roomCode clients)
           [ Scores (scores latest)
           , UpdateBoard uBoard
           , PlayerMoved { movePlayer = username, moveReport = Undone }
           ]
-        return undone
+        return state{ game = undone }
 
+-- for use with Map.alterF
 newtype IOAnd c a = IOAnd { runIOAnd :: IO (c, a) } deriving (Functor)
 
 addClient :: Maybe Client -> IOAnd (Chan ToClient) (Maybe Client)
@@ -250,31 +254,31 @@ removeClient (Just Client{ connectionCount = n, ear })
   | n <= 1 = Nothing
   | otherwise = Just Client{ connectionCount = n - 1, ear }
 
-joinedRoom :: RoomState -> WS.Connection -> Username -> IO ()
-joinedRoom state@RoomState{ clients, roomCode, setStale } conn username = do
+joinedRoom :: Room -> WS.Connection -> Username -> IO ()
+joinedRoom room@Room{ roomState, roomCode, setStale } conn username = do
   setStale False
   sendToConn conn (UpdateRoomCode roomCode)
-  clientEar <- modifyMVar clients $ \clientMap -> do
-    (ear, newClients) <- runIOAnd (Map.alterF addClient username clientMap)
-    return (newClients, ear)
-  modifyGame CannotUndo state $ \gameState -> do
+  clientEar <- modifyMVar roomState $ \state@RoomState{ clients } -> do
+    (ear, newClients) <- runIOAnd (Map.alterF addClient username clients)
+    return (state{ clients = newClients }, ear)
+  modifyGame CannotUndo room $ \gameState -> do
     let withPlayer = addPlayerIfAbsent username gameState
     sendMessages [Broadcast (Scores (scores withPlayer))]
     return (withPlayer, ())
   (readDoesNotReturn, neitherDoesWrite) <- concurrently
-    (playerRead state conn username)
-    (writeThread state clientEar conn username)
+    (playerRead room conn username)
+    (writeThread room clientEar conn username)
     `onException` do
-      modifyMVar_ clients $ \clientMap -> do
+      modifyMVar_ roomState $ \state@RoomState{ clients } -> do
         print (roomCode, "disconnected", username)
-        let newMap = Map.alter removeClient username clientMap
-        when (Map.null newMap) (setStale True)
-        return newMap
+        let newClients = Map.alter removeClient username clients
+        when (Map.null newClients) (setStale True)
+        return state{ clients = newClients }
   () <- absurd readDoesNotReturn
   absurd neitherDoesWrite
 
-playerRead :: RoomState -> WS.Connection -> Username -> IO Void
-playerRead roomState@RoomState{ roomCode } conn username = forever $ do
+playerRead :: Room -> WS.Connection -> Username -> IO Void
+playerRead room@Room{ roomCode, roomState } conn username = forever $ do
   msg <- readFromClient conn
   case msg of
     Nothing -> return ()
@@ -285,15 +289,16 @@ playerRead roomState@RoomState{ roomCode } conn username = forever $ do
           print (roomCode, "bad chat", chatError, msgToSend)
           sendToConn conn (TechnicalError chatError)
         Nothing ->
-          broadcast roomState
-            ChatMessage{ chatSentBy = username, chatContent = msgToSend }
+          withMVar roomState $ \RoomState{ clients } -> do
+            broadcast roomCode clients
+              ChatMessage{ chatSentBy = username, chatContent = msgToSend }
     Just (MakeMove move) -> doMove (applyMove username move)
     Just (Exchange tiles) -> doMove (applyExchange username tiles)
     Just Pass -> doMove (applyPass username)
-    Just Undo -> applyUndo roomState username
+    Just Undo -> applyUndo room username
   where
     doMove applyToGame =
-      modifyGame CanUndo roomState $ \game ->
+      modifyGame CanUndo room $ \game ->
         case applyToGame game of
           Right (moveReport, nextGame@GameState{ board, players }) -> do
             sendMessages [Targeted username (MoveResult (Right ()))]
@@ -319,16 +324,16 @@ playerRead roomState@RoomState{ roomCode } conn username = forever $ do
             sendMessages [Targeted username (MoveResult (Left moveError))]
             return (game, ())
 
-writeThread :: RoomState -> Chan ToClient -> WS.Connection -> Username -> IO Void
-writeThread RoomState{ gameStore, roomCode } toClientChan conn username = do
-  withMVar gameStore $ \game -> do
+writeThread :: Room -> Chan ToClient -> WS.Connection -> Username -> IO Void
+writeThread Room{ roomState, roomCode } ear conn username = do
+  withMVar roomState $ \RoomState{ game } -> do
     let GameState{ board, players } = latestState game
-    mapM_ (writeChan toClientChan)
+    mapM_ (writeChan ear)
       [ UpdateBoard board
       , UpdateTileData tileData
       ]
     case Map.lookup username players of
       Nothing -> print (roomCode, "sendRack: player missing", username)
-      Just PlayerState{ rack } -> writeChan toClientChan (UpdateRack rack)
+      Just PlayerState{ rack } -> writeChan ear (UpdateRack rack)
   forever $ do
-    sendToConn conn =<< readChan toClientChan
+    sendToConn conn =<< readChan ear
