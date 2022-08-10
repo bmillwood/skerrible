@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TupleSections #-}
 module Main (main) where
@@ -9,9 +10,11 @@ import Control.Concurrent
 import Control.Exception
 import Control.Lens (ifor_)
 import Control.Monad
+import Control.Monad.Trans.Writer
 import qualified Data.Map as Map
 import Data.Function (fix)
 import Data.Map (Map)
+import Data.Monoid (Endo(Endo))
 import Data.String (fromString)
 import Data.Void
 import System.Environment (getArgs, lookupEnv)
@@ -185,14 +188,33 @@ data Undoable
   = CanUndo
   | CannotUndo
 
-modifyGame :: Undoable -> RoomState -> (GameState -> IO (GameState, a)) -> IO a
-modifyGame undoable RoomState{ gameStore } change = do
+data Message
+  = Server String
+  | Targeted Username ToClient
+  | Broadcast ToClient
+
+sendMessages :: [Message] -> Writer (Endo [Message]) ()
+sendMessages = tell . Endo . (++)
+
+getMessages :: Endo [Message] -> [Message]
+getMessages (Endo k) = k []
+
+modifyGame
+  :: Undoable
+  -> RoomState
+  -> (GameState -> Writer (Endo [Message]) (GameState, a))
+  -> IO a
+modifyGame undoable roomState@RoomState{ gameStore, roomCode } change = do
   modifyMVar gameStore $ \game -> do
-    (nextState, result) <- change (latestState game)
     let
+      ((nextState, result), messages) = runWriter (change (latestState game))
       apply = case undoable of
         CanUndo -> addState
         CannotUndo -> setLatestState
+    forM_ (getMessages messages) $ \case
+      Server s -> print (roomCode, s)
+      Targeted u tc -> sendToClient roomState u tc
+      Broadcast tc -> broadcast roomState tc
     return (apply nextState game, result)
 
 applyUndo :: RoomState -> Username -> IO ()
@@ -237,7 +259,7 @@ joinedRoom state@RoomState{ clients, roomCode, setStale } conn username = do
     return (newClients, ear)
   modifyGame CannotUndo state $ \gameState -> do
     let withPlayer = addPlayerIfAbsent username gameState
-    broadcast state (Scores (scores withPlayer))
+    sendMessages [Broadcast (Scores (scores withPlayer))]
     return (withPlayer, ())
   (readDoesNotReturn, neitherDoesWrite) <- concurrently
     (playerRead state conn username)
@@ -274,26 +296,27 @@ playerRead roomState@RoomState{ roomCode } conn username = forever $ do
       modifyGame CanUndo roomState $ \game ->
         case applyToGame game of
           Right (moveReport, nextGame@GameState{ board, players }) -> do
-            sendToClient roomState username (MoveResult (Right ()))
+            sendMessages [Targeted username (MoveResult (Right ()))]
             case Map.lookup username players of
-              Nothing -> print (roomCode, "sendRack: player missing", username)
+              Nothing ->
+                sendMessages [Server $ "sendRack: player missing: " ++ show username]
               Just PlayerState{ rack } ->
-                sendToClient roomState username (UpdateRack rack)
-            mapM_ (broadcast roomState)
-              [ PlayerMoved { movePlayer = username, moveReport }
-              , Scores (scores nextGame)
-              , UpdateBoard board
+                sendMessages [Targeted username (UpdateRack rack)]
+            sendMessages
+              [ Broadcast $ PlayerMoved { movePlayer = username, moveReport }
+              , Broadcast $ Scores (scores nextGame)
+              , Broadcast $ UpdateBoard board
               ]
             case nextGame of
               GameState{ gameOver = True } ->
-                mapM_ (broadcast roomState)
-                  [ Scores (scores nextGame)
-                  , GameOver
+                sendMessages
+                  [ Broadcast $ Scores (scores nextGame)
+                  , Broadcast $ GameOver
                   ]
               _ -> return ()
             return (nextGame, ())
           Left moveError -> do
-            sendToClient roomState username (MoveResult (Left moveError))
+            sendMessages [Targeted username (MoveResult (Left moveError))]
             return (game, ())
 
 writeThread :: RoomState -> Chan ToClient -> WS.Connection -> Username -> IO Void
