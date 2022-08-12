@@ -150,17 +150,19 @@ viewPreLogin { loginState, loginForm } =
           }
         ]
 
+    cannotSubmit = String.isEmpty loginForm.username
     submitButton =
       Html.input
         [ Attributes.type_ "submit"
         , Attributes.name "login"
         , Attributes.value "Login"
+        , Attributes.disabled cannotSubmit
         ]
         []
   in
   Html.form
     [ Events.onSubmit (
-          if String.isEmpty loginForm.username
+          if cannotSubmit
           then Msg.doNothing
           else Msg.PreLogin Msg.Submit
         )
