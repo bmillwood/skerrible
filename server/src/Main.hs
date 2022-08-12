@@ -154,7 +154,7 @@ handleConnection state@(ServerState roomsVar) request conn = do
   identVar <- newIORef (show $ Wai.remoteHost request)
   let logClient prefix = readIORef identVar >>= putStrLn . (prefix ++)
   logClient "handleConnection: "
-  fix $ \loop -> do
+  WS.withPingThread conn 30 (logClient "ping: ") $ fix $ \loop -> do
     msg <- readFromClient conn
     case msg of
       Nothing -> return ()
@@ -164,34 +164,33 @@ handleConnection state@(ServerState roomsVar) request conn = do
             print ("login failed", usernameError, loginRequestName, roomSpec)
             sendToConn conn (TechnicalError usernameError)
             loop
-          Nothing ->
-            WS.withPingThread conn 30 (logClient "ping: ") $ do
-              writeIORef identVar (show loginRequestName)
-              print ("logged in", loginRequestName, roomSpec)
-              join $ modifyMVar roomsVar $ \rooms -> do
-                case roomSpec of
-                  JoinRoom code ->
-                    case Map.lookup code rooms of
-                      Nothing -> do
-                        sendToConn conn RoomDoesNotExist
-                        return (rooms, loop)
-                      Just room ->
-                        return (rooms, joinedRoom room conn loginRequestName)
-                  MakeNewRoom roomSettings -> do
-                    code <- unusedRoomCode 4
-                    setStale <- staleSetter code state
-                    room <- newRoom code roomSettings setStale
-                    return
-                      ( Map.insert code room rooms
-                      , joinedRoom room conn loginRequestName
-                      )
-                   where
-                    unusedRoomCode len = do
-                      code <- RoomCode . fromString
-                        <$> replicateM len (Random.randomRIO ('A', 'Z'))
-                      if Map.member code rooms
-                        then unusedRoomCode (len + 1)
-                        else return code
+          Nothing -> do
+            writeIORef identVar (show loginRequestName)
+            print ("logged in", loginRequestName, roomSpec)
+            join $ modifyMVar roomsVar $ \rooms -> do
+              case roomSpec of
+                JoinRoom code ->
+                  case Map.lookup code rooms of
+                    Nothing -> do
+                      sendToConn conn RoomDoesNotExist
+                      return (rooms, loop)
+                    Just room ->
+                      return (rooms, joinedRoom room conn loginRequestName)
+                MakeNewRoom roomSettings -> do
+                  code <- unusedRoomCode 4
+                  setStale <- staleSetter code state
+                  room <- newRoom code roomSettings setStale
+                  return
+                    ( Map.insert code room rooms
+                    , joinedRoom room conn loginRequestName
+                    )
+                  where
+                  unusedRoomCode len = do
+                    code <- RoomCode . fromString
+                      <$> replicateM len (Random.randomRIO ('A', 'Z'))
+                    if Map.member code rooms
+                      then unusedRoomCode (len + 1)
+                      else return code
       Just other -> do
         sendToConn conn (TechnicalError ProtocolError)
         print ("unexpected message, dropping connection", other)
