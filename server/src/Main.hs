@@ -13,6 +13,7 @@ import Control.Monad
 import Control.Monad.Trans.Writer
 import qualified Data.Map as Map
 import Data.Function (fix)
+import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.Map (Map)
 import Data.Monoid (Endo(Endo))
 import Data.String (fromString)
@@ -237,14 +238,11 @@ applyUndo Room{ roomCode, roomState } username = do
           ]
         return state{ game = undone }
 
--- for use with Map.alterF
-newtype IOAnd c a = IOAnd { runIOAnd :: IO (c, a) } deriving (Functor)
-
-addClient :: Maybe Client -> IOAnd (Chan ToClient) (Maybe Client)
-addClient Nothing = IOAnd $ do
+addClient :: Maybe Client -> IO (Chan ToClient, Maybe Client)
+addClient Nothing = do
   ear <- newChan
   return (ear, Just Client{ connectionCount = 1, ear })
-addClient (Just Client{ connectionCount = n, ear = oldEar }) = IOAnd $ do
+addClient (Just Client{ connectionCount = n, ear = oldEar }) = do
   newEar <- dupChan oldEar
   return (newEar, Just Client{ connectionCount = n + 1, ear = newEar })
 
@@ -259,7 +257,7 @@ joinedRoom room@Room{ roomState, roomCode, setStale } conn username = do
   setStale False
   sendToConn conn (UpdateRoomCode roomCode)
   clientEar <- modifyMVar roomState $ \state@RoomState{ clients } -> do
-    (ear, newClients) <- runIOAnd (Map.alterF addClient username clients)
+    (ear, newClients) <- getCompose (Map.alterF (Compose . addClient) username clients)
     return (state{ clients = newClients }, ear)
   modifyGame CannotUndo room $ \gameState -> do
     let withPlayer = addPlayerIfAbsent username gameState
