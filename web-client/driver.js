@@ -6,6 +6,9 @@ var app = Elm.Main.init({
 app.ports.sendToJS.subscribe(function(request) {
     switch(request.kind) {
     case 'connect':
+        if(socket) {
+            socket.close();
+        }
         socket = new WebSocket(request.payload);
         socket.addEventListener("open", function(event) {
             app.ports.receiveFromJS.send({ tag: 'server-status', contents: 'connected' });
