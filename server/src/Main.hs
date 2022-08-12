@@ -14,6 +14,7 @@ import Control.Monad.Trans.Writer
 import qualified Data.Map as Map
 import Data.Function (fix)
 import Data.Functor.Compose (Compose(Compose, getCompose))
+import Data.IORef
 import Data.Map (Map)
 import Data.Monoid (Endo(Endo))
 import Data.String (fromString)
@@ -104,8 +105,12 @@ main = do
   Warp.runSettings settings (waiApp state staticPath)
 
 waiApp :: ServerState -> FilePath -> Wai.Application
-waiApp state staticPath =
-  WaiWS.websocketsOr WS.defaultConnectionOptions (wsApp state) (staticApp staticPath)
+waiApp state staticPath request =
+  WaiWS.websocketsOr
+    WS.defaultConnectionOptions
+    (wsApp state request)
+    (staticApp staticPath)
+    request
 
 logStaticLookups :: WaiStatic.StaticSettings -> WaiStatic.StaticSettings
 logStaticLookups settings =
@@ -122,8 +127,8 @@ staticApp staticPath =
       logStaticLookups
       $ WaiStatic.defaultFileServerSettings staticPath
 
-wsApp :: ServerState -> WS.ServerApp
-wsApp state = handleConnection state <=< WS.acceptRequest
+wsApp :: ServerState -> Wai.Request -> WS.ServerApp
+wsApp state request = handleConnection state request <=< WS.acceptRequest
 
 sendToConn :: WS.Connection -> ToClient -> IO ()
 sendToConn conn msg = do
@@ -144,9 +149,11 @@ readFromClient conn = do
       return Nothing
     Just msg -> return (Just msg)
 
-handleConnection :: ServerState -> WS.Connection -> IO ()
-handleConnection state@(ServerState roomsVar) conn = do
-  print "handleConnection"
+handleConnection :: ServerState -> Wai.Request -> WS.Connection -> IO ()
+handleConnection state@(ServerState roomsVar) request conn = do
+  identVar <- newIORef (show $ Wai.remoteHost request)
+  let logClient prefix = readIORef identVar >>= putStrLn . (prefix ++)
+  logClient "handleConnection: "
   fix $ \loop -> do
     msg <- readFromClient conn
     case msg of
@@ -158,7 +165,8 @@ handleConnection state@(ServerState roomsVar) conn = do
             sendToConn conn (TechnicalError usernameError)
             loop
           Nothing ->
-            WS.withPingThread conn 30 (print ("ping", loginRequestName)) $ do
+            WS.withPingThread conn 30 (logClient "ping: ") $ do
+              writeIORef identVar (show loginRequestName)
               print ("logged in", loginRequestName, roomSpec)
               join $ modifyMVar roomsVar $ \rooms -> do
                 case roomSpec of
