@@ -346,7 +346,7 @@ viewError error =
     text =
       case error of
         Nothing -> ""
-        Just Move.YouAreNotPlaying -> "The game is not in progress."
+        Just Move.YouAreNotPlaying -> "You are not a player in this game."
         Just Move.GameIsOver -> "The game has already ended."
         Just Move.NotYourTurn -> "It's not your turn!"
         Just Move.OffBoard -> "Your move starts or ends off the edge of the board."
@@ -629,9 +629,13 @@ view { error, state } =
                   , transientError = game.transientError
                   }
 
-              rackDisplay =
+              rackOrJoin =
                 case game.playing of
-                  Nothing -> []
+                  Nothing ->
+                    [ Html.button
+                        [ Events.onClick Msg.SendJoin ]
+                        [ Html.text "Join game" ]
+                    ]
                   Just { proposal, rack } ->
                     [ viewRack
                         { rack =
@@ -646,7 +650,6 @@ view { error, state } =
                               Just (Move.ProposeExchange tiles) -> Just tiles
                         , rackError = game.transientError == Just Model.RackError
                         }
-                    , Html.hr [ Attributes.style "clear" "both" ] []
                     ]
             in
             Html.map Ok (
@@ -665,8 +668,9 @@ view { error, state } =
                       , Html.hr [ Attributes.style "clear" "both" ] []
                       , viewError game.moveError
                       ]
-                    , rackDisplay
-                    , [ viewChatting chat
+                    , rackOrJoin
+                    , [ Html.hr [ Attributes.style "clear" "both" ] []
+                      , viewChatting chat
                       ]
                     ]
                   )

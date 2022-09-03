@@ -58,6 +58,7 @@ test-suite server-tests
     skerrible,
     base,
     containers,
+    lens,
     random,
     transformers,
     HUnit

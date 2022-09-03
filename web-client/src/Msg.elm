@@ -29,6 +29,7 @@ type OkMsg
   | ComposeMessage String
   | SendMessage String
   | ReceiveChatMessage Model.Chat
+  | SendJoin
   | ReceiveMove { player : String, moveReport : Model.MoveReport }
   | UpdateScores (Dict String Int)
   | UpdateBoard Board

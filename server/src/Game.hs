@@ -1,9 +1,12 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RankNTypes #-}
 module Game where
 
+import qualified Control.Lens as Lens
 import Control.Monad (foldM, when)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
+import Data.Function
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map as Map
@@ -295,31 +298,35 @@ fillPlayerRack game pst@PlayerState{ rack = Rack tiles } =
     (drawTiles (rackSize - toInteger (length tiles)) game)
 
 updatePlayer
-  :: (GameState -> Maybe PlayerState -> (GameState, Maybe PlayerState))
-  -> Username -> GameState -> GameState
-updatePlayer f username game@GameState{ players } =
-    nextGame{ players = newPlayers }
+  :: (GameState -> Maybe PlayerState -> (r, Maybe PlayerState))
+  -> Lens.Lens' r GameState
+  -> Username -> GameState -> r
+updatePlayer f rGS username game@GameState{ players } =
+    r & Lens.over rGS (\nextGame -> nextGame{ players = newPlayers })
   where
-    (nextGame, newPlayers) = Map.alterF (f game) username players
+    (r, newPlayers) = Map.alterF (f game) username players
 
 fillRack :: Username -> GameState -> GameState
 fillRack =
   updatePlayer
     (\game -> maybe (game, Nothing) (fmap Just . fillPlayerRack game))
+    id
 
-addPlayerIfAbsent :: Username -> GameState -> GameState
-addPlayerIfAbsent username = updatePlayer add username
+addPlayerIfAbsent :: Username -> GameState -> (PlayerState, GameState)
+addPlayerIfAbsent username = updatePlayer add Lens._2 username
   where
     add game Nothing =
       ( case turns of
-          NoTurns -> nextGame
+          NoTurns -> (p, nextGame)
           Turns{ notMovedYet } ->
-            nextGame{ turns = turns{ notMovedYet = Set.insert username notMovedYet } }
+            ( p
+            , nextGame{ turns = turns{ notMovedYet = Set.insert username notMovedYet } }
+            )
       , Just p
       )
       where
         (nextGame@GameState{ turns }, p) = fillPlayerRack game newPlayer
-    add game (Just p) = (game, Just p)
+    add game (Just p) = ((p, game), Just p)
 
 takeFrom :: (Eq a) => [a] -> [a] -> Either (NonEmpty a) [a]
 takeFrom [] right = Right right
@@ -383,7 +390,8 @@ advanceTurns username Turns{ prevMover, mustFollow, notMovedYet } =
 
 takeTurn :: Username -> StateT GameState (Either MoveError) ()
 takeTurn username = do
-  game@GameState{ gameOver, turns } <- get
+  game@GameState{ gameOver, players, turns } <- get
+  when (not (Map.member username players)) $ lift $ Left YouAreNotPlaying
   when gameOver $ lift $ Left GameIsOver
   nextTurns <- lift $ advanceTurns username turns
   put game{ turns = nextTurns }

@@ -148,6 +148,7 @@ update msg model =
           ( setChat { chat | history = Model.Chatted chatMsg :: chat.history }
           , Cmd.none
           )
+        Ok Msg.SendJoin -> ( model, Ports.joinGame )
         Ok (Msg.ReceiveMove moveReport) ->
           ( setChat { chat | history = Model.PlayerMoved moveReport :: chat.history }
           , Cmd.none

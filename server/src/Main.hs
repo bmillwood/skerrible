@@ -248,6 +248,9 @@ applyUndo :: Room -> Username -> IO ()
 applyUndo Room{ roomCode, roomState } username = do
   modifyMVar_ roomState $ \state@RoomState{ clients, game } ->
     case undo game of
+      _ | not (Map.member username (players (latestState game))) -> do
+        sendToClient roomCode clients username (MoveResult (Left YouAreNotPlaying))
+        return state
       Nothing -> do
         return state
       Just undone -> do
@@ -282,12 +285,8 @@ joinedRoom room@Room{ roomState, roomCode, setStale } conn username = do
   clientEar <- modifyMVar roomState $ \state@RoomState{ clients } -> do
     (ear, newClients) <- getCompose (Map.alterF (Compose . addClient) username clients)
     return (state{ clients = newClients }, ear)
-  modifyGame CannotUndo room $ \gameState -> do
-    let withPlayer = addPlayerIfAbsent username gameState
-    sendMessages [Broadcast (Scores (scores withPlayer))]
-    return (withPlayer, ())
   (readDoesNotReturn, neitherDoesWrite) <- concurrently
-    (playerRead room conn username)
+    (clientRead room conn username)
     (writeThread room clientEar conn username)
     `onException` do
       modifyMVar_ roomState $ \state@RoomState{ clients } -> do
@@ -298,12 +297,21 @@ joinedRoom room@Room{ roomState, roomCode, setStale } conn username = do
   () <- absurd readDoesNotReturn
   absurd neitherDoesWrite
 
-playerRead :: Room -> WS.Connection -> Username -> IO Void
-playerRead room@Room{ roomCode, roomState } conn username = forever $ do
+clientRead :: Room -> WS.Connection -> Username -> IO Void
+clientRead room@Room{ roomCode, roomState } conn username = forever $ do
   msg <- readFromClient conn
   case msg of
     Nothing -> return ()
     Just LoginRequest{} -> print (roomCode, "unexpected second login", username, msg)
+    Just JoinGame ->
+      modifyGame CannotUndo room $ \gameState -> do
+        -- should be harmless if player is already in the game
+        let (PlayerState{ rack }, withPlayer) = addPlayerIfAbsent username gameState
+        sendMessages
+          [ Broadcast (Scores (scores withPlayer))
+          , Targeted username (UpdateRack rack)
+          ]
+        return (withPlayer, ())
     Just Chat{ msgToSend } ->
       case validChat msgToSend of
         Just chatError -> do
@@ -346,15 +354,12 @@ playerRead room@Room{ roomCode, roomState } conn username = forever $ do
             return (game, ())
 
 writeThread :: Room -> Chan ToClient -> WS.Connection -> Username -> IO Void
-writeThread Room{ roomState, roomCode } ear conn username = do
+writeThread Room{ roomState } ear conn _ = do
   withMVar roomState $ \RoomState{ game } -> do
-    let GameState{ board, players } = latestState game
+    let GameState{ board } = latestState game
     mapM_ (writeChan ear)
       [ UpdateBoard board
       , UpdateTileData tileData
       ]
-    case Map.lookup username players of
-      Nothing -> print (roomCode, "sendRack: player missing", username)
-      Just PlayerState{ rack } -> writeChan ear (UpdateRack rack)
   forever $ do
     sendToConn conn =<< readChan ear

@@ -64,6 +64,9 @@ login { username, roomAction, roomCode, roomSettings } =
   , ( "roomSpec", roomSpec )
   ] |> send
 
+joinGame : Cmd msg
+joinGame = send (withTag "JoinGame" [])
+
 chat : String -> Cmd msg
 chat message =
   withTag "Chat" [("msgToSend", Json.Encode.string message)]

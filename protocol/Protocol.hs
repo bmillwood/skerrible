@@ -153,6 +153,7 @@ instance Aeson.ToJSON RoomSpec
 
 data FromClient
   = LoginRequest { loginRequestName :: Username, roomSpec :: RoomSpec }
+  | JoinGame
   | Chat { msgToSend :: Text }
   | MakeMove Move
   | Exchange (NonEmpty Tile)
