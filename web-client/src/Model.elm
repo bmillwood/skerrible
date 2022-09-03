@@ -12,12 +12,16 @@ type TransientError
   | SquareError Int Int
   | BoardError
 
+type alias Playing =
+  { rack : Board.Rack
+  , proposal : Maybe Move.Proposal
+  }
+
 type alias Game =
   { board : Board
   , tileData : DictTile Board.TileData
   , scores : Dict String Int
-  , rack : Board.Rack
-  , proposal : Maybe Move.Proposal
+  , playing : Maybe Playing
   , moveError : Maybe Move.Error
   , transientError : Maybe TransientError
   , showHelp : Bool

@@ -622,47 +622,54 @@ view { error, state } =
                   { board = game.board
                   , tileData = game.tileData
                   , proposedMove =
-                      case game.proposal of
+                      case game.playing |> Maybe.andThen .proposal of
                         Nothing -> Nothing
                         Just (Move.ProposeMove move) -> Just move
                         Just (Move.ProposeExchange _) -> Nothing
                   , transientError = game.transientError
                   }
 
-              remainingRack =
-                case game.proposal of
-                  Nothing -> game.rack
-                  Just p -> Move.remainingRack p game.rack
               rackDisplay =
-                viewRack
-                  { rack = remainingRack
-                  , tileData = game.tileData
-                  , proposedExchange =
-                      case game.proposal of
-                        Nothing -> Nothing
-                        Just (Move.ProposeMove _) -> Nothing
-                        Just (Move.ProposeExchange tiles) -> Just tiles
-                  , rackError = game.transientError == Just Model.RackError
-                  }
+                case game.playing of
+                  Nothing -> []
+                  Just { proposal, rack } ->
+                    [ viewRack
+                        { rack =
+                            case proposal of
+                              Nothing -> rack
+                              Just p -> Move.remainingRack p rack
+                        , tileData = game.tileData
+                        , proposedExchange =
+                            case proposal of
+                              Nothing -> Nothing
+                              Just (Move.ProposeMove _) -> Nothing
+                              Just (Move.ProposeExchange tiles) -> Just tiles
+                        , rackError = game.transientError == Just Model.RackError
+                        }
+                    , Html.hr [ Attributes.style "clear" "both" ] []
+                    ]
             in
             Html.map Ok (
                 Html.div
                   []
-                  [ roomCodeDisplay
-                  , boardDisplay
-                  , viewScores game.scores
-                  , Html.div
-                      []
-                      [ Html.button
-                          [ Events.onClick Msg.SendUndo ]
-                          [ Html.text "Undo" ]
+                  (List.concat
+                    [ [ roomCodeDisplay
+                      , boardDisplay
+                      , viewScores game.scores
+                      , Html.div
+                          []
+                          [ Html.button
+                              [ Events.onClick Msg.SendUndo ]
+                              [ Html.text "Undo" ]
+                          ]
+                      , Html.hr [ Attributes.style "clear" "both" ] []
+                      , viewError game.moveError
                       ]
-                  , Html.hr [ Attributes.style "clear" "both" ] []
-                  , viewError game.moveError
-                  , rackDisplay
-                  , Html.hr [ Attributes.style "clear" "both" ] []
-                  , viewChatting chat
-                  ]
+                    , rackDisplay
+                    , [ viewChatting chat
+                      ]
+                    ]
+                  )
               )
       ]
   in

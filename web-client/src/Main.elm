@@ -91,8 +91,7 @@ update msg model =
                       { board = Board.empty
                       , tileData = DictTile.empty
                       , scores = Dict.empty
-                      , rack = []
-                      , proposal = Nothing
+                      , playing = Nothing
                       , moveError = Nothing
                       , transientError = Nothing
                       , showHelp = True
@@ -129,6 +128,7 @@ update msg model =
       let
         setChat newChat = { model | state = Model.InGame { inGame | chat = newChat } }
         setGame newGame = { model | state = Model.InGame { inGame | game = newGame } }
+        setPlaying newPlaying = setGame { game | playing = Just newPlaying }
         error errorMsg = ( { model | error = Just errorMsg }, Cmd.none )
       in
       case msg of
@@ -161,41 +161,53 @@ update msg model =
         Ok (Msg.UpdateTileData tileData) ->
           ( setGame { game | tileData = tileData }, Cmd.none )
         Ok (Msg.UpdateRack newRack) ->
-          ( setGame { game | rack = newRack, proposal = Nothing }, Cmd.none )
+          ( setPlaying { rack = newRack, proposal = Nothing }, Cmd.none )
         Ok (Msg.ShuffleRack Nothing) ->
-          -- Generate a list of indices instead of a shuffled rack to avoid
-          -- overwriting in-flight racks from the server.
           ( model
-          , Random.generate
-              (Ok << Msg.ShuffleRack << Just)
-              (Random.List.shuffle (List.indexedMap (\i _ -> i) game.rack))
+          , case game.playing of
+              Nothing -> Cmd.none
+              Just { rack } ->
+                -- Generate a list of indices instead of a shuffled rack to avoid
+                -- overwriting in-flight racks from the server.
+                Random.generate
+                  (Ok << Msg.ShuffleRack << Just)
+                  (Random.List.shuffle (List.indexedMap (\i _ -> i) rack))
           )
         Ok (Msg.ShuffleRack (Just indices)) ->
-          let
-            allIndicesPresent =
-              List.all
-                (\i -> List.member i indices)
-                (List.indexedMap (\i _ -> i) game.rack)
-            newRack = List.filterMap (\i -> List.head (List.drop i game.rack)) indices
-          in
-          if allIndicesPresent
-          then ( setGame { game | rack = newRack }, Cmd.none )
-          else
-            -- Ignoring is fine. You can just click the button again.
-            ( model, Cmd.none )
+          case game.playing of
+            Nothing -> ( model, Cmd.none )
+            Just ({ rack } as playing) ->
+              let
+                allIndicesPresent =
+                  List.all
+                    (\i -> List.member i indices)
+                    (List.indexedMap (\i _ -> i) rack)
+                newRack = List.filterMap (\i -> List.head (List.drop i rack)) indices
+              in
+              if allIndicesPresent
+              then ( setPlaying { playing | rack = newRack }, Cmd.none )
+              else
+                -- Ignoring is fine. You can just click the button again.
+                ( model, Cmd.none )
         Ok (Msg.SetTransientError newTransientError) ->
           ( setGame { game | transientError = newTransientError }, Cmd.none )
         Ok (Msg.UpdateProposal proposalUpdate) ->
-          case game.proposal of
+          case game.playing of
             Nothing -> ( model, Cmd.none )
-            Just proposal ->
-              update
-                (Ok (updateProposal game.board game.rack proposal proposalUpdate))
-                model
+            Just { proposal, rack } ->
+              case proposal of
+                Nothing -> ( model, Cmd.none )
+                Just prop ->
+                  update
+                    (Ok (updateProposal game.board rack prop proposalUpdate))
+                    model
         Ok (Msg.Propose proposal) ->
-          ( setGame { game | proposal = proposal }, Cmd.none )
+          case game.playing of
+            Nothing -> ( model, Cmd.none )
+            Just playing ->
+              ( setPlaying { playing | proposal = proposal }, Cmd.none )
         Ok Msg.SendProposal ->
-          case game.proposal of
+          case game.playing |> Maybe.andThen .proposal of
             Nothing -> ( model, Cmd.none )
             Just (Move.ProposeMove move) -> ( model, Ports.sendMove move )
             Just (Move.ProposeExchange tiles) -> ( model, Ports.sendExchange tiles )
@@ -204,7 +216,13 @@ update msg model =
         Ok (Msg.MoveResult (Err moveError)) ->
           ( setGame { game | moveError = Just moveError }, Cmd.none )
         Ok (Msg.MoveResult (Ok ())) ->
-          ( setGame { game | moveError = Nothing, proposal = Nothing }, Cmd.none )
+          let
+            newPlaying =
+              case game.playing of
+                Nothing -> Nothing
+                Just { rack } -> Just { rack = rack, proposal = Nothing }
+          in
+          ( setGame { game | moveError = Nothing, playing = newPlaying }, Cmd.none )
         Ok Msg.ClearMoveError ->
           ( setGame { game | moveError = Nothing }, Cmd.none )
         Ok (Msg.UpdateScores newScores) ->
