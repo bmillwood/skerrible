@@ -607,32 +607,49 @@ view { error, state } =
             Html.map Ok (viewPreLogin preLogin)
           Model.InGame { chat, game, roomCode } ->
             let
+              roomCodeDisplay =
+                Html.p []
+                  [ Html.text "Room code: "
+                  , Html.text roomCode
+                  , Html.text " "
+                  , Html.a
+                      [ Attributes.href ("?room=" ++ roomCode) ]
+                      [ Html.text "link" ]
+                  ]
+
+              boardDisplay =
+                viewBoard
+                  { board = game.board
+                  , tileData = game.tileData
+                  , proposedMove =
+                      case game.proposal of
+                        Nothing -> Nothing
+                        Just (Move.ProposeMove move) -> Just move
+                        Just (Move.ProposeExchange _) -> Nothing
+                  , transientError = game.transientError
+                  }
+
               remainingRack =
                 case game.proposal of
                   Nothing -> game.rack
                   Just p -> Move.remainingRack p game.rack
+              rackDisplay =
+                viewRack
+                  { rack = remainingRack
+                  , tileData = game.tileData
+                  , proposedExchange =
+                      case game.proposal of
+                        Nothing -> Nothing
+                        Just (Move.ProposeMove _) -> Nothing
+                        Just (Move.ProposeExchange tiles) -> Just tiles
+                  , rackError = game.transientError == Just Model.RackError
+                  }
             in
             Html.map Ok (
                 Html.div
                   []
-                  [ Html.p []
-                      [ Html.text "Room code: "
-                      , Html.text roomCode
-                      , Html.text " "
-                      , Html.a
-                          [ Attributes.href ("?room=" ++ roomCode) ]
-                          [ Html.text "link" ]
-                      ]
-                  , viewBoard
-                      { board = game.board
-                      , tileData = game.tileData
-                      , proposedMove =
-                          case game.proposal of
-                            Nothing -> Nothing
-                            Just (Move.ProposeMove move) -> Just move
-                            Just (Move.ProposeExchange _) -> Nothing
-                      , transientError = game.transientError
-                      }
+                  [ roomCodeDisplay
+                  , boardDisplay
                   , viewScores game.scores
                   , Html.div
                       []
@@ -642,16 +659,7 @@ view { error, state } =
                       ]
                   , Html.hr [ Attributes.style "clear" "both" ] []
                   , viewError game.moveError
-                  , viewRack
-                      { rack = remainingRack
-                      , tileData = game.tileData
-                      , proposedExchange =
-                          case game.proposal of
-                            Nothing -> Nothing
-                            Just (Move.ProposeMove _) -> Nothing
-                            Just (Move.ProposeExchange tiles) -> Just tiles
-                      , rackError = game.transientError == Just Model.RackError
-                      }
+                  , rackDisplay
                   , Html.hr [ Attributes.style "clear" "both" ] []
                   , viewChatting chat
                   ]
