@@ -10,9 +10,12 @@ import Control.Concurrent
 import Control.Exception
 import Control.Lens (ifor_)
 import Control.Monad
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except
 import Control.Monad.Trans.Writer
 import qualified Data.Map as Map
 import Data.Function (fix)
+import Data.Functor
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.IORef
 import Data.Map (Map)
@@ -154,46 +157,59 @@ handleConnection state@(ServerState roomsVar) request conn = do
   identVar <- newIORef (show $ Wai.remoteHost request)
   let logClient prefix = readIORef identVar >>= putStrLn . (prefix ++)
   logClient "handleConnection: "
-  WS.withPingThread conn 30 (logClient "ping: ") $ fix $ \loop -> do
-    msg <- readFromClient conn
-    case msg of
-      Nothing -> return ()
+  WS.withPingThread conn 30 (logClient "ping: ") $ fix $ \loop ->
+    either id return <=< runExceptT $ do
+    let
+      dropConnection = throwE (return ())
+      tryAgain = throwE loop
+    (username, roomSpec) <- lift (readFromClient conn) >>= \case
+      Nothing -> dropConnection
       Just LoginRequest{ loginRequestName, roomSpec } ->
         case validUsername loginRequestName of
           Just usernameError -> do
-            print ("login failed", usernameError, loginRequestName, roomSpec)
-            sendToConn conn (TechnicalError usernameError)
-            loop
+            lift $ do
+              print ("login failed", usernameError, loginRequestName, roomSpec)
+              sendToConn conn (TechnicalError usernameError)
+            tryAgain
           Nothing -> do
-            writeIORef identVar (show loginRequestName)
-            print ("logged in", loginRequestName, roomSpec)
-            join $ modifyMVar roomsVar $ \rooms -> do
-              case roomSpec of
-                JoinRoom code ->
-                  case Map.lookup code rooms of
-                    Nothing -> do
-                      sendToConn conn RoomDoesNotExist
-                      return (rooms, loop)
-                    Just room ->
-                      return (rooms, joinedRoom room conn loginRequestName)
-                MakeNewRoom roomSettings -> do
-                  code <- unusedRoomCode 4
-                  setStale <- staleSetter code state
-                  room <- newRoom code roomSettings setStale
-                  return
-                    ( Map.insert code room rooms
-                    , joinedRoom room conn loginRequestName
-                    )
-                  where
-                  unusedRoomCode len = do
-                    code <- RoomCode . fromString
-                      <$> replicateM len (Random.randomRIO ('A', 'Z'))
-                    if Map.member code rooms
-                      then unusedRoomCode (len + 1)
-                      else return code
+            lift $ do
+              writeIORef identVar (show loginRequestName)
+              print ("logged in", loginRequestName, roomSpec)
+            return (loginRequestName, roomSpec)
       Just other -> do
-        sendToConn conn (TechnicalError ProtocolError)
-        print ("unexpected message, dropping connection", other)
+        lift $ do
+          print ("unexpected message, dropping connection", other)
+          sendToConn conn (TechnicalError ProtocolError)
+        dropConnection
+    let
+      modifyMVarE var f =
+        join . lift . modifyMVar var $ \x ->
+          runExceptT (f x) <&> \case
+            Left e -> (x, throwE e)
+            Right (newX, r) -> (newX, return r)
+    room <- modifyMVarE roomsVar $ \rooms -> do
+      case roomSpec of
+        JoinRoom code ->
+          case Map.lookup code rooms of
+            Nothing -> do
+              lift $ sendToConn conn RoomDoesNotExist
+              tryAgain
+            Just room ->
+              return (rooms, room)
+        MakeNewRoom roomSettings -> do
+          code <- lift $ unusedRoomCode 4
+          room <- lift $ do
+            setStale <- staleSetter code state
+            newRoom code roomSettings setStale
+          return (Map.insert code room rooms, room)
+         where
+          unusedRoomCode len = do
+            code <- RoomCode . fromString
+              <$> replicateM len (Random.randomRIO ('A', 'Z'))
+            if Map.member code rooms
+              then unusedRoomCode (len + 1)
+              else return code
+    lift $ joinedRoom room conn username
 
 data Undoable
   = CanUndo
