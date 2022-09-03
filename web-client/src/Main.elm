@@ -226,15 +226,14 @@ update msg model =
           ( setGame { game | moveError = Nothing, playing = newPlaying }, Cmd.none )
         Ok Msg.ClearMoveError ->
           ( setGame { game | moveError = Nothing }, Cmd.none )
-        Ok (Msg.UpdateScores newScores) ->
+        Ok (Msg.UpdatePeople newFolks) ->
           let
-            newFolks = Set.fromList (Dict.keys newScores)
             added =
               Set.diff newFolks chat.folks
-              |> Set.toList |> List.map Model.Joined
+              |> Set.toList |> List.map Model.JoinedRoom
             removed =
               Set.diff chat.folks newFolks
-              |> Set.toList |> List.map Model.Left
+              |> Set.toList |> List.map Model.LeftRoom
           in
           ( { model
             | state = Model.InGame
@@ -244,6 +243,22 @@ update msg model =
                   | folks = newFolks
                   , history = added ++ removed ++ chat.history
                   }
+                }
+            }
+          , Cmd.none
+          )
+        Ok (Msg.UpdateScores newScores) ->
+          let
+            newPlayers =
+              Set.diff
+                (Set.fromList (Dict.keys newScores))
+                (Set.fromList (Dict.keys game.scores))
+              |> Set.toList |> List.map Model.JoinedGame
+          in
+          ( { model
+            | state = Model.InGame
+                { inGame
+                | chat = { chat | history = newPlayers ++ chat.history }
                 , game = { game | scores = newScores }
                 }
             }

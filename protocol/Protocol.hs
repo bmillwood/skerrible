@@ -6,6 +6,7 @@ module Protocol where
 import qualified Data.Aeson as Aeson
 import Data.List.NonEmpty (NonEmpty)
 import Data.Map (Map)
+import Data.Set (Set)
 import qualified Data.Text as Text
 import Data.Text (Text)
 import GHC.Generics (Generic)
@@ -204,6 +205,7 @@ data ToClient
   = TechnicalError TechErrorMsg
   | RoomDoesNotExist
   | UpdateRoomCode RoomCode
+  | People (Set Username)
   | Scores (Map Username Integer)
   | ChatMessage { chatSentBy :: Username, chatContent :: Text }
   | PlayerMoved { movePlayer :: Username, moveReport :: MoveReport }

@@ -284,6 +284,7 @@ joinedRoom room@Room{ roomState, roomCode, setStale } conn username = do
   sendToConn conn (UpdateRoomCode roomCode)
   clientEar <- modifyMVar roomState $ \state@RoomState{ clients } -> do
     (ear, newClients) <- getCompose (Map.alterF (Compose . addClient) username clients)
+    broadcast roomCode newClients (People (Map.keysSet newClients))
     return (state{ clients = newClients }, ear)
   (readDoesNotReturn, neitherDoesWrite) <- concurrently
     (clientRead room conn username)
@@ -292,6 +293,7 @@ joinedRoom room@Room{ roomState, roomCode, setStale } conn username = do
       modifyMVar_ roomState $ \state@RoomState{ clients } -> do
         print (roomCode, "disconnected", username)
         let newClients = Map.alter removeClient username clients
+        broadcast roomCode newClients (People (Map.keysSet newClients))
         when (Map.null newClients) (setStale True)
         return state{ clients = newClients }
   () <- absurd readDoesNotReturn

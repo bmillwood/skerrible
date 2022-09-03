@@ -255,6 +255,10 @@ serverMsg =
 
     updateRoomCode = Json.Decode.map (Ok << Msg.UpdateRoomCode) Json.Decode.string
 
+    people =
+      Json.Decode.list Json.Decode.string
+      |> Json.Decode.map (Ok << Msg.UpdatePeople << Set.fromList)
+
     scores =
       listOfPairs Json.Decode.string Json.Decode.int
       |> Json.Decode.map (Ok << Msg.UpdateScores << Dict.fromList)
@@ -363,6 +367,7 @@ serverMsg =
     [ ( "TechnicalError" , WithContents techError )
     , ( "RoomDoesNotExist", Plain roomDoesNotExist )
     , ( "UpdateRoomCode", WithContents updateRoomCode )
+    , ( "People", WithContents people )
     , ( "Scores", WithContents scores )
     , ( "ChatMessage", WithFieldsInline message )
     , ( "PlayerMoved", WithFieldsInline playerMoved )

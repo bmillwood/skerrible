@@ -6,6 +6,7 @@ import Html exposing (Html)
 import Html.Attributes as Attributes
 import Html.Events as Events
 import Json.Decode
+import Set exposing (Set)
 
 import Board exposing (Board)
 import DictTile exposing (DictTile)
@@ -443,8 +444,8 @@ viewRack { rack, tileData, proposedExchange, rackError } =
         ]
     ]
 
-viewChatting : Model.ChattingState -> Html Msg.OkMsg
-viewChatting { folks, me, messageEntry, history } =
+viewChatting : Model.ChattingState -> { spectators : Set String } -> Html Msg.OkMsg
+viewChatting { me, messageEntry, history } { spectators } =
   let
     inputRow =
       Html.tr
@@ -471,8 +472,9 @@ viewChatting { folks, me, messageEntry, history } =
       let
         (username, content) =
           case item of
-            Model.Joined joiner -> (joiner, [ Html.text "joined" ])
-            Model.Left leaver -> (leaver, [ Html.text "left" ])
+            Model.JoinedRoom joiner -> (joiner, [ Html.text "joined the room" ])
+            Model.LeftRoom leaver -> (leaver, [ Html.text "left the room" ])
+            Model.JoinedGame leaver -> (leaver, [ Html.text "joined the game" ])
             Model.Chatted { sender, message } ->
               ( sender
               , [ Html.text (": " ++ message) ]
@@ -512,8 +514,14 @@ viewChatting { folks, me, messageEntry, history } =
         , Html.td [] content
         ]
   in
-  Html.table []
-    (inputRow :: List.map historyRow history)
+  Html.div
+    []
+    [ Html.text "Spectators: "
+    , Html.text (String.join ", " (Set.toList spectators))
+    , Html.table
+        []
+        (inputRow :: List.map historyRow history)
+    ]
 
 viewHelp : Html Msg
 viewHelp =
@@ -651,6 +659,11 @@ view { error, state } =
                         , rackError = game.transientError == Just Model.RackError
                         }
                     ]
+
+              spectators =
+                Set.diff
+                  chat.folks
+                  (Set.fromList (Dict.keys game.scores))
             in
             Html.map Ok (
                 Html.div
@@ -670,7 +683,7 @@ view { error, state } =
                       ]
                     , rackOrJoin
                     , [ Html.hr [ Attributes.style "clear" "both" ] []
-                      , viewChatting chat
+                      , viewChatting chat { spectators = spectators }
                       ]
                     ]
                   )

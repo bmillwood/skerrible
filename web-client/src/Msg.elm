@@ -31,6 +31,7 @@ type OkMsg
   | ReceiveChatMessage Model.Chat
   | SendJoin
   | ReceiveMove { player : String, moveReport : Model.MoveReport }
+  | UpdatePeople (Set String)
   | UpdateScores (Dict String Int)
   | UpdateBoard Board
   | UpdateTileData (DictTile Board.TileData)

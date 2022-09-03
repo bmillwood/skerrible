@@ -39,8 +39,9 @@ type MoveReport
   | Undone
 
 type Message
-  = Joined String
-  | Left String
+  = JoinedRoom String
+  | LeftRoom String
+  | JoinedGame String
   | Chatted Chat
   | PlayerMoved { player : String, moveReport : MoveReport }
   | GameOver
