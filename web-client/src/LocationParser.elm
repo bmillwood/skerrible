@@ -9,30 +9,53 @@ import Url
 import Url.Parser
 import Url.Parser.Query
 
-type alias QueryParams =
-  { username : Maybe String
+import Model
+
+type alias Result =
+  { error : Maybe String
+  , endpoint : String
+  , username : String
   , room : Maybe String
-  , autoLogin : Maybe Bool
+  , autoLogin : Bool
+  , turns : Model.TurnEnforcement
   }
 
-queryParser =
-  let
-    bool name =
-      Url.Parser.Query.enum name (Dict.fromList [ ("true", True), ("false", False) ])
-  in
-  Url.Parser.Query.map3
-    QueryParams
-    (Url.Parser.Query.string "username")
-    (Url.Parser.Query.string "room")
-    (bool "autoLogin")
-
+defaults : Result
 defaults =
   { error = Nothing
   , endpoint = "ws://localhost:4170"
   , username = ""
   , room = Nothing
   , autoLogin = False
+  , turns = Model.LetPlayersChoose
   }
+
+type alias QueryParams =
+  { username : Maybe String
+  , room : Maybe String
+  , autoLogin : Maybe Bool
+  , turns : Maybe Model.TurnEnforcement
+  }
+
+queryParser =
+  let
+    bool name =
+      Url.Parser.Query.enum name (Dict.fromList [ ("true", True), ("false", False) ])
+    turns =
+      Url.Parser.Query.enum
+        "turns"
+        (Dict.fromList
+          [ ( "chaos", Model.NoEnforcement )
+          , ( "follow", Model.LetPlayersChoose )
+          ]
+        )
+  in
+  Url.Parser.Query.map4
+    QueryParams
+    (Url.Parser.Query.string "username")
+    (Url.Parser.Query.string "room")
+    (bool "autoLogin")
+    turns
 
 protocolWorkaround : { replaceWith : String } -> String -> (String, String)
 protocolWorkaround { replaceWith } url =
@@ -41,14 +64,7 @@ protocolWorkaround { replaceWith } url =
     protocol :: _ ->
       (protocol, replaceWith ++ String.dropLeft (String.length protocol) url)
 
-parseLocation
-  :  Json.Decode.Value
-  -> { error : Maybe String
-     , endpoint : String
-     , username : String
-     , room : Maybe String
-     , autoLogin : Bool
-     }
+parseLocation : Json.Decode.Value -> Result
 parseLocation flags =
   let
     parsedUrl =
@@ -72,7 +88,7 @@ parseLocation flags =
   case parsedUrl of
     Err msg ->
       { defaults | error = Just msg }
-    Ok (originalProtocol, url, { username, room, autoLogin }) ->
+    Ok (originalProtocol, url, { username, room, autoLogin, turns }) ->
       let
         websocketProtocol =
           if originalProtocol == "https"
@@ -84,9 +100,10 @@ parseLocation flags =
           |> protocolWorkaround { replaceWith = websocketProtocol }
           |> Tuple.second
       in
-      { defaults
-      | username = Maybe.withDefault defaults.username username
+      { error = Nothing
+      , username = Maybe.withDefault defaults.username username
       , room = room
       , autoLogin = Maybe.withDefault defaults.autoLogin autoLogin
       , endpoint = endpoint
+      , turns = Maybe.withDefault defaults.turns turns
       }

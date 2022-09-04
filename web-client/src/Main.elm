@@ -24,7 +24,7 @@ import View
 init : Json.Decode.Value -> (Model, Cmd Msg)
 init flags =
   let
-    { error, endpoint, username, room, autoLogin }
+    { error, endpoint, username, room, autoLogin, turns }
       = LocationParser.parseLocation flags
   in
   ( { error = error
@@ -41,7 +41,7 @@ init flags =
               , roomCode = Maybe.withDefault "" room
               , roomSettings =
                   { noBoardMultipliers = False
-                  , turnEnforcement = Model.LetPlayersChoose
+                  , turnEnforcement = turns
                   }
               }
           }
