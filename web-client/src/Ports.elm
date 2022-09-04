@@ -143,8 +143,11 @@ type VariantSpec a
   | WithFieldsInline (Json.Decode.Decoder a)
   | WithContents (Json.Decode.Decoder a)
 
-variant : { name : String } -> List (String, VariantSpec a) -> Json.Decode.Decoder a
-variant { name } values =
+-- if any variant has data, all of them are represented as an object with a
+-- tag field
+variantWithFields
+  : { name : String } -> List (String, VariantSpec a) -> Json.Decode.Decoder a
+variantWithFields { name } values =
   let
     dict = Dict.fromList values
   in
@@ -166,7 +169,7 @@ connectionStatus =
 
 decodeTile : Json.Decode.Decoder Board.Tile
 decodeTile =
-  variant
+  variantWithFields
     { name = "decodeTile" }
     [ ("Blank", Plain Board.Blank)
     , ("Letter", WithContents (Json.Decode.map Board.Letter Key.decodeChar))
@@ -190,7 +193,7 @@ moveDirection =
 
 decodeMoveTile : Json.Decode.Decoder Move.Tile
 decodeMoveTile =
-  variant
+  variantWithFields
     { name = "decodeMoveTile" }
     [ ( "PlaceTile", WithContents (Json.Decode.map Move.PlaceTile decodeTile) )
     , ( "UseBoard", Plain Move.UseBoard )
@@ -244,7 +247,7 @@ serverMsg =
         (Json.Decode.field "lengthUsed" Json.Decode.int)
         (Json.Decode.field "lengthLimit" Json.Decode.int)
     techError =
-      variant
+      variantWithFields
         { name = "TechErrorMsg" }
         [ ( "ProtocolError", Plain (Err (Msg.ClientError "Unspecified protocol error :(")) )
         , ( "MustNotBeEmpty", Plain (Err (Msg.ClientError "Must not be empty")) )
@@ -277,7 +280,7 @@ serverMsg =
         (Json.Decode.field "moveScore" Json.Decode.int)
     exchanged = Json.Decode.map Model.Exchanged Json.Decode.int
     moveReport =
-      variant
+      variantWithFields
         { name = "playerMoved" }
         [ ( "PlayedWord", WithFieldsInline playedWord )
         , ( "Exchanged", WithContents exchanged )
@@ -337,7 +340,7 @@ serverMsg =
       |> Json.Decode.map (Ok << Msg.UpdateRack)
 
     moveError =
-      variant
+      variantWithFields
         { name = "moveError" }
         [ ( "YouAreNotPlaying", Plain Move.YouAreNotPlaying )
         , ( "GameIsOver", Plain Move.GameIsOver )
@@ -362,7 +365,7 @@ serverMsg =
       eitherResult moveError moveOk
       |> Json.Decode.map (Ok << Msg.MoveResult)
   in
-  variant
+  variantWithFields
     { name = "serverMsg" }
     [ ( "TechnicalError" , WithContents techError )
     , ( "RoomDoesNotExist", Plain roomDoesNotExist )
@@ -386,7 +389,7 @@ fromJS =
         Connected -> Ok (Msg.PreLogin Msg.Connected)
         Disconnected -> Err Msg.ServerDisconnected
   in
-  variant
+  variantWithFields
     { name = "fromJS" }
     [ ("server-status", WithContents (Json.Decode.map ofConnStatus connectionStatus))
     , ("from-server", WithContents serverMsg)
