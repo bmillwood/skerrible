@@ -1,8 +1,19 @@
-FROM haskell:9
+FROM alpine:3 AS build
+# need curl for cabal update
+RUN apk add ghc cabal curl musl-dev libffi-dev zlib-dev
 WORKDIR /opt/skerrible
 RUN cabal update
 COPY ./skerrible.cabal ./skerrible.cabal
 RUN cabal build --only-dependencies -j4
-COPY . .
-RUN cabal install
-CMD ["skerrible-server", "static-root"]
+COPY LICENSE .
+COPY protocol protocol
+COPY server server
+RUN mkdir ./bin
+RUN cabal install --install-method=copy --installdir=/opt/skerrible/bin
+
+FROM alpine:3
+RUN apk add gmp libffi
+WORKDIR /opt/skerrible
+COPY web-client/*.js web-client/*.html static-root/
+COPY --from=build /opt/skerrible/bin .
+CMD ["./skerrible-server", "static-root"]
