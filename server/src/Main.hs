@@ -14,7 +14,7 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Writer
 import qualified Data.Map as Map
-import Data.Function (fix)
+import Data.Function
 import Data.Functor
 import Data.Functor.Compose (Compose(Compose, getCompose))
 import Data.IORef
@@ -34,6 +34,7 @@ import qualified Network.WebSockets as WS
 
 import Game
 import Protocol
+import Version
 
 data Client
   = Client
@@ -91,21 +92,27 @@ broadcast roomCode clients msg = do
   print (roomCode, "broadcast", msg)
   mapM_ (\Client{ ear } -> writeChan ear msg) clients
 
-warpSettings :: IO Warp.Settings
-warpSettings = do
-  host <- fromString . maybe "localhost" id <$> lookupEnv "HOST"
-  port <- maybe portNumber read <$> lookupEnv "PORT"
-  return
-    $ Warp.setHost host
-    $ Warp.setPort port
-    $ Warp.defaultSettings
+warpSettings :: String -> Int -> Warp.Settings
+warpSettings host port =
+  Warp.defaultSettings
+  & Warp.setHost (fromString host)
+  & Warp.setPort port
 
 main :: IO ()
 main = do
+  host <- fromString . maybe "localhost" id <$> lookupEnv "HOST"
+  port <- maybe portNumber read <$> lookupEnv "PORT"
   [staticPath] <- getArgs
+  putStrLn . concat $
+    [ "skerrible "
+    , maybe "" (\v -> "(" ++ v ++ ") ") Version.version
+    , "listening on "
+    , host ++ ":" ++ show port
+    ]
   state <- newServerState
-  settings <- warpSettings
-  Warp.runSettings settings (waiApp state staticPath)
+  Warp.runSettings
+    (warpSettings host port)
+    (waiApp state staticPath)
 
 waiApp :: ServerState -> FilePath -> Wai.Application
 waiApp state staticPath request =

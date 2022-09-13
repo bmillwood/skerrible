@@ -8,6 +8,8 @@ RUN cabal build --only-dependencies -j4
 COPY LICENSE .
 COPY protocol protocol
 COPY server server
+ARG version
+RUN sed -i -re 's/Nothing/Just "'"$version"'"/' server/src/Version.hs
 RUN mkdir ./bin
 RUN cabal install --install-method=copy --installdir=/opt/skerrible/bin
 
