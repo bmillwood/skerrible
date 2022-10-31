@@ -1,0 +1,5 @@
+# I know you're supposed to commit this, but I don't want to
+.terraform.lock.hcl
+.terraform
+terraform.tfstate
+terraform.tfstate.backup
