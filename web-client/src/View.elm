@@ -239,15 +239,19 @@ viewBoard { board, tileData, proposedMove, transientError } =
           case transientError of
             Just (Model.SquareError i j) -> i == rowN && j == colN
             _ -> False
-        bgColor =
+        (bgColor, description) =
           case sq.wordMult of
-            3 -> "#f77"
-            2 -> "#fcc"
+            3 -> ("#f77", Just "triple word")
+            2 -> ("#fcc", Just "double word")
             _ ->
               case sq.letterMult of
-                3 -> "#88f"
-                2 -> "#bbf"
-                _ -> "#ccc"
+                3 -> ("#88f", Just "triple letter")
+                2 -> ("#bbf", Just "double letter")
+                _ -> ("#ccc", Nothing)
+        title =
+          case description of
+            Nothing -> []
+            Just descr -> [ Attributes.title descr ]
         directionIfHere =
           case proposedMove of
             Nothing -> Nothing
@@ -273,6 +277,7 @@ viewBoard { board, tileData, proposedMove, transientError } =
                         Just Move.Down -> Msg.Propose Nothing
               )
             ]
+          , title
           , squareStyle
           ] |> List.concat
         tile =
