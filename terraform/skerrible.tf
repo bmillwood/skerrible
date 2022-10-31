@@ -86,7 +86,7 @@ resource "aws_ecs_service" "skerrible" {
   network_configuration {
     subnets = [aws_subnet.main.id]
     security_groups = [
-      aws_security_group.allow_outgoing.id,
+      aws_security_group.allow_outgoing_https.id,
       aws_security_group.allow_skerrible.id,
     ]
     assign_public_ip = true

@@ -26,13 +26,13 @@ resource "aws_route_table_association" "main" {
   route_table_id = aws_route_table.main.id
 }
 
-resource "aws_security_group" "allow_outgoing" {
+resource "aws_security_group" "allow_outgoing_https" {
   vpc_id = aws_vpc.main.id
-  name = "allow_outgoing"
+  name = "allow_outgoing_https"
   egress {
-    protocol = "-1"
-    from_port = 0
-    to_port = 0
+    protocol = "tcp"
+    from_port = 443
+    to_port = 443
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
