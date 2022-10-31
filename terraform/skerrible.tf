@@ -91,5 +91,5 @@ resource "aws_ecs_service" "skerrible" {
     ]
     assign_public_ip = true
   }
-  desired_count = 1
+  desired_count = 0
 }
