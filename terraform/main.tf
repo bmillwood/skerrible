@@ -7,10 +7,6 @@ terraform {
   }
 }
 
-provider "aws" {
-  region = "eu-west-2"
-}
-
 data "aws_region" "current" {
 }
 
@@ -91,5 +87,5 @@ resource "aws_ecs_service" "skerrible" {
     ]
     assign_public_ip = true
   }
-  desired_count = 0
+  desired_count = var.desired_count
 }
