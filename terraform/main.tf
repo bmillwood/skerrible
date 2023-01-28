@@ -64,10 +64,35 @@ resource "aws_ecs_task_definition" "skerrible" {
         { name = "HOST", value = "0.0.0.0" },
       ]
       portMappings = [
-        { containerPort = 4170 },
+        { containerPort = var.internal_port },
       ]
     },
   ])
+}
+
+resource "aws_lb_target_group" "skerrible" {
+  name = "skerrible"
+  port = var.internal_port
+  protocol = "TCP"
+  target_type = "ip"
+  vpc_id = aws_vpc.main.id
+}
+
+resource "aws_lb" "skerrible" {
+  name = "skerrible"
+  internal = false
+  load_balancer_type = "network"
+  subnets = [aws_subnet.main.id]
+}
+
+resource "aws_lb_listener" "skerrible" {
+  load_balancer_arn = aws_lb.skerrible.arn
+  port = 80
+  protocol = "TCP"
+  default_action {
+    type = "forward"
+    target_group_arn = aws_lb_target_group.skerrible.arn
+  }
 }
 
 resource "aws_ecs_cluster" "skerrible" {
@@ -86,6 +111,11 @@ resource "aws_ecs_service" "skerrible" {
       aws_security_group.allow_skerrible.id,
     ]
     assign_public_ip = true
+  }
+  load_balancer {
+    target_group_arn = aws_lb_target_group.skerrible.arn
+    container_name = "skerrible"
+    container_port = var.internal_port
   }
   desired_count = var.desired_count
 }

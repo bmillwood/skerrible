@@ -41,8 +41,8 @@ resource "aws_security_group" "allow_skerrible" {
   vpc_id = aws_vpc.main.id
   name = "allow_skerrible"
   ingress {
-    from_port = 4170
-    to_port = 4170
+    from_port = var.internal_port
+    to_port = var.internal_port
     protocol = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
