@@ -168,17 +168,16 @@ viewPreLogin { loginState, loginForm } =
           else Msg.PreLogin Msg.Submit
         )
     ]
-    [ Html.p
-        []
-        [ Html.text "Server: "
-        , Html.map Msg.PreLogin endpointInput
-        , Html.text " (default is usually correct)"
-        ]
-    , Html.p []
+    [ Html.p []
         [ Html.text "Username: "
         , Html.map Msg.PreLogin usernameInput
         ]
     , Html.map Msg.PreLogin roomSpec
+    , Html.p []
+        [ Html.text "Server: "
+        , Html.map Msg.PreLogin endpointInput
+        , Html.text " (default is usually correct)"
+        ]
     , Html.p [] [ submitButton ]
     ]
 
