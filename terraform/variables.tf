@@ -7,6 +7,6 @@ variable "internal_port" {
   default = 4170
 }
 
-variable "version" {
+variable "image_tag" {
   type = string
 }
