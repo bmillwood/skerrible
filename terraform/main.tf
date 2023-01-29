@@ -51,7 +51,7 @@ resource "aws_ecs_task_definition" "skerrible" {
   container_definitions = jsonencode([
     {
       name = "skerrible"
-      image = "${aws_ecr_repository.skerrible.repository_url}:48c0a04"
+      image = "${aws_ecr_repository.skerrible.repository_url}:${var.version}"
       logConfiguration = {
         logDriver = "awslogs"
         options = {
