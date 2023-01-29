@@ -520,12 +520,16 @@ viewChatting { me, messageEntry, history } { spectators } =
   in
   Html.div
     []
-    [ Html.text "Spectators: "
-    , Html.text (String.join ", " (Set.toList spectators))
-    , Html.table
-        []
-        (inputRow :: List.map historyRow history)
-    ]
+    (List.concat
+      [ if Set.isEmpty spectators
+        then []
+        else
+          [ Html.text "Spectators: "
+          , Html.text (String.join ", " (Set.toList spectators))
+          ]
+      , [ Html.table [] (inputRow :: List.map historyRow history) ]
+      ]
+    )
 
 viewHelp : Html Msg
 viewHelp =
