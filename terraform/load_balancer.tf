@@ -48,10 +48,26 @@ resource "aws_lb" "skerrible" {
   depends_on = [aws_s3_bucket_policy.skerrible_allow_log_write]
 }
 
-resource "aws_lb_listener" "skerrible" {
+resource "aws_lb_listener" "skerrible_http" {
   load_balancer_arn = aws_lb.skerrible.arn
   port = 80
   protocol = "HTTP"
+  default_action {
+    type = "redirect"
+    redirect {
+      port = "443"
+      protocol = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_lb_listener" "skerrible_https" {
+  load_balancer_arn = aws_lb.skerrible.arn
+  port = 443
+  protocol = "HTTPS"
+  certificate_arn = var.certificate_arn
+  ssl_policy = "ELBSecurityPolicy-2016-08"
   default_action {
     type = "forward"
     target_group_arn = aws_lb_target_group.skerrible.arn

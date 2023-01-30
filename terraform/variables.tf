@@ -10,3 +10,7 @@ variable "internal_port" {
 variable "image_tag" {
   type = string
 }
+
+variable "certificate_arn" {
+  type = string
+}
