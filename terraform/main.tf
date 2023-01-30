@@ -70,31 +70,6 @@ resource "aws_ecs_task_definition" "skerrible" {
   ])
 }
 
-resource "aws_lb_target_group" "skerrible" {
-  name = "skerrible"
-  port = var.internal_port
-  protocol = "TCP"
-  target_type = "ip"
-  vpc_id = aws_vpc.main.id
-}
-
-resource "aws_lb" "skerrible" {
-  name = "skerrible"
-  internal = false
-  load_balancer_type = "network"
-  subnets = [aws_subnet.main.id]
-}
-
-resource "aws_lb_listener" "skerrible" {
-  load_balancer_arn = aws_lb.skerrible.arn
-  port = 80
-  protocol = "TCP"
-  default_action {
-    type = "forward"
-    target_group_arn = aws_lb_target_group.skerrible.arn
-  }
-}
-
 resource "aws_ecs_cluster" "skerrible" {
   name = "skerrible"
 }
@@ -105,7 +80,7 @@ resource "aws_ecs_service" "skerrible" {
   launch_type = "FARGATE"
   task_definition = aws_ecs_task_definition.skerrible.arn
   network_configuration {
-    subnets = [aws_subnet.main.id]
+    subnets = [aws_subnet.a.id, aws_subnet.b.id]
     security_groups = [
       aws_security_group.allow_outgoing_https.id,
       aws_security_group.allow_skerrible.id,
