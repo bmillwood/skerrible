@@ -13,8 +13,8 @@ import Task
 
 import Board exposing (Board)
 import DictTile
+import FlagsParser
 import Key exposing (Key)
-import LocationParser
 import Model exposing (Model)
 import Move exposing (Move)
 import Msg exposing (Msg)
@@ -22,10 +22,10 @@ import Ports
 import View
 
 init : Json.Decode.Value -> (Model, Cmd Msg)
-init flags =
+init rawFlags =
   let
     { error, endpoint, username, room, autoLogin, turns }
-      = LocationParser.parseLocation flags
+      = FlagsParser.parseFlags rawFlags
   in
   ( { error = error
     , state =
