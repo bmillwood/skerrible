@@ -1,5 +1,6 @@
 module Model exposing (..)
 
+import Browser.Navigation
 import Dict exposing (Dict)
 import Set exposing (Set)
 
@@ -88,6 +89,8 @@ type State
   = PreLogin PreLoginState
   | InGame { roomCode : String, chat : ChattingState, game : Game }
 
-type alias WithError state = { error : Maybe String, state : state }
-
-type alias Model = WithError State
+type alias Model =
+  { navKey : Browser.Navigation.Key
+  , error : Maybe String
+  , state : State
+  }

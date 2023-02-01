@@ -3,6 +3,7 @@ module Main exposing (main)
 import Browser
 import Browser.Dom
 import Browser.Events
+import Browser.Navigation
 import Dict
 import Json.Decode
 import Html exposing (Html)
@@ -10,6 +11,7 @@ import Random
 import Random.List
 import Set
 import Task
+import Url exposing (Url)
 
 import Board exposing (Board)
 import DictTile
@@ -21,13 +23,14 @@ import Msg exposing (Msg)
 import Ports
 import View
 
-init : Json.Decode.Value -> (Model, Cmd Msg)
-init rawFlags =
+init : Json.Decode.Value -> Url -> Browser.Navigation.Key -> (Model, Cmd Msg)
+init rawFlags url navKey =
   let
     { error, endpoint, username, room, autoLogin, turns }
       = FlagsParser.parseFlags rawFlags
   in
   ( { error = error
+    , navKey = navKey
     , state =
         Model.PreLogin
           { loginState = Model.NotSubmitted
@@ -62,12 +65,15 @@ update msgs model =
       in
       (lastModel, Cmd.batch [nextCmd, lastCmd])
 
-updatePreLogin : Msg.LoginFormMsg -> Model.WithError Model.PreLoginState -> (Model, Cmd Msg)
-updatePreLogin msg { error, state } =
+updatePreLogin
+  : Msg.LoginFormMsg -> Model -> Model.PreLoginState -> (Model, Cmd Msg)
+updatePreLogin msg model state =
   let
-    set newPreLogin = { state = Model.PreLogin newPreLogin, error = error }
+    set newPreLogin =
+      { model | state = Model.PreLogin newPreLogin }
     failed newError =
-      ( { state = Model.PreLogin { state | loginState = Model.Failed }
+      ( { model
+        | state = Model.PreLogin { state | loginState = Model.Failed }
         , error = Just newError
         }
       , Cmd.none
@@ -75,7 +81,8 @@ updatePreLogin msg { error, state } =
   in
   case msg of
     Msg.UpdateRoomCode code ->
-      ( { state =
+      ( { model
+        | state =
             Model.InGame
               { chat =
                   { folks = Set.empty
@@ -120,16 +127,14 @@ updateOne msg model =
       ( model
       , Task.attempt (\_ -> Msg.doNothing) (Browser.Dom.blur blurId)
       )
+    (_, Msg.Global (Msg.UrlRequest (Browser.Internal _))) ->
+      ( model, Cmd.none )
+    (_, Msg.Global (Msg.UrlChange url)) ->
+      ( model, Cmd.none )
+    (_, Msg.Global (Msg.UrlRequest (Browser.External url))) ->
+      ( model, Browser.Navigation.load url )
     (Model.PreLogin preLogin, Msg.PreLogin loginFormMsg) ->
-      let
-        (newModel, newCmd) =
-          updatePreLogin loginFormMsg { state = preLogin, error = model.error }
-      in
-      ( { newModel
-        | error = Maybe.withDefault model.error (Maybe.map Just newModel.error)
-        }
-      , newCmd
-      )
+      updatePreLogin loginFormMsg model preLogin
     (Model.PreLogin _, _) ->
       ( { model | error = Just "Bug: inappropriate message type for pre-login state" }
       , Cmd.none
@@ -358,9 +363,11 @@ subscriptions model =
     ]
 
 main =
-  Browser.document
+  Browser.application
     { init          = init
     , view          = View.view
     , update        = update
     , subscriptions = subscriptions
+    , onUrlRequest  = \req -> [Msg.Global (Msg.UrlRequest req)]
+    , onUrlChange   = \chg -> [Msg.Global (Msg.UrlChange chg)]
     }

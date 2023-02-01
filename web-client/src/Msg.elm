@@ -1,7 +1,9 @@
 module Msg exposing (..)
 
+import Browser
 import Dict exposing (Dict)
 import Set exposing (Set)
+import Url exposing (Url)
 
 import Board exposing (Board)
 import DictTile exposing (DictTile)
@@ -12,6 +14,8 @@ import Move exposing (Move)
 type GlobalMsg
   = SetError (Maybe String)
   | BlurById String
+  | UrlRequest Browser.UrlRequest
+  | UrlChange Url
 
 type LoginFormMsg
   = Update Model.LoginForm
