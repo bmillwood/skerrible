@@ -85,9 +85,15 @@ type alias ChattingState =
   , history : List Message
   }
 
+type alias RoomState =
+  { roomCode : String
+  , chat : ChattingState
+  , game : Game
+  }
+
 type State
   = PreLogin PreLoginState
-  | InGame { roomCode : String, chat : ChattingState, game : Game }
+  | InRoom RoomState
 
 type alias Model =
   { navKey : Browser.Navigation.Key

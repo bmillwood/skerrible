@@ -258,18 +258,18 @@ serverMsg =
 
     people =
       Json.Decode.list Json.Decode.string
-      |> Json.Decode.map (Msg.InGame << Msg.UpdatePeople << Set.fromList)
+      |> Json.Decode.map (Msg.InRoom << Msg.UpdatePeople << Set.fromList)
 
     scores =
       listOfPairs Json.Decode.string Json.Decode.int
-      |> Json.Decode.map (Msg.InGame << Msg.UpdateScores << Dict.fromList)
+      |> Json.Decode.map (Msg.InRoom << Msg.UpdateScores << Dict.fromList)
 
     message =
       Json.Decode.map2
         Model.Chat
         (Json.Decode.field "chatSentBy" Json.Decode.string)
         (Json.Decode.field "chatContent" Json.Decode.string)
-      |> Json.Decode.map (Msg.InGame << Msg.ReceiveChatMessage)
+      |> Json.Decode.map (Msg.InRoom << Msg.ReceiveChatMessage)
 
     playedWord =
       Json.Decode.map2
@@ -288,7 +288,7 @@ serverMsg =
     playerMoved =
       Json.Decode.map2
         (\player report ->
-          Msg.InGame (Msg.ReceiveMove { player = player, moveReport = report })
+          Msg.InRoom (Msg.ReceiveMove { player = player, moveReport = report })
         )
         (Json.Decode.field "movePlayer" Json.Decode.string)
         (Json.Decode.field "moveReport" moveReport)
@@ -300,7 +300,7 @@ serverMsg =
         (Json.Decode.field "tileCount" Json.Decode.int)
     updateTileData =
       listOfPairs decodeTile tileData
-      |> Json.Decode.map (Msg.InGame << Msg.UpdateTileData << DictTile.fromList)
+      |> Json.Decode.map (Msg.InRoom << Msg.UpdateTileData << DictTile.fromList)
 
     posSquare =
       Json.Decode.map3
@@ -331,11 +331,11 @@ serverMsg =
           { top = top, left = left, squares = squares }
     updateBoard =
       Json.Decode.list posSquare
-      |> Json.Decode.map (Msg.InGame << Msg.UpdateBoard << ofPosSquares)
+      |> Json.Decode.map (Msg.InRoom << Msg.UpdateBoard << ofPosSquares)
 
     updateRack =
       Json.Decode.list decodeTile
-      |> Json.Decode.map (Msg.InGame << Msg.UpdateRack)
+      |> Json.Decode.map (Msg.InRoom << Msg.UpdateRack)
 
     moveError =
       variantWithFields
@@ -361,7 +361,7 @@ serverMsg =
     moveOk = Json.Decode.succeed ()
     moveResult =
       eitherResult moveError moveOk
-      |> Json.Decode.map (Msg.InGame << Msg.MoveResult)
+      |> Json.Decode.map (Msg.InRoom << Msg.MoveResult)
   in
   variantWithFields
     { name = "serverMsg" }
@@ -376,7 +376,7 @@ serverMsg =
     , ( "UpdateBoard", WithContents updateBoard )
     , ( "UpdateRack", WithContents updateRack )
     , ( "MoveResult", WithContents moveResult )
-    , ( "GameOver", Plain (Msg.InGame Msg.GameOver) )
+    , ( "GameOver", Plain (Msg.InRoom Msg.GameOver) )
     ]
 
 fromJS : Json.Decode.Decoder Msg.OneMsg

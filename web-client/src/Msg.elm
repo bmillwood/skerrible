@@ -30,7 +30,7 @@ type ProposalUpdate
   | CancelProposal
   | SubmitProposal
 
-type GameMsg
+type RoomMsg
   = ComposeMessage String
   | SendMessage String
   | ReceiveChatMessage Model.Chat
@@ -56,7 +56,7 @@ type GameMsg
 type OneMsg
   = Global GlobalMsg
   | PreLogin LoginFormMsg
-  | InGame GameMsg
+  | InRoom RoomMsg
 
 error : String -> OneMsg
 error e = Global (SetError (Just e))
