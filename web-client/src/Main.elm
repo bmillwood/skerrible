@@ -47,23 +47,23 @@ init rawFlags =
           }
     }
   , if autoLogin
-    then Task.perform identity (Task.succeed (Ok (Msg.PreLogin Msg.Submit)))
+    then Task.perform identity (Task.succeed [Ok (Msg.PreLogin Msg.Submit)])
     else Cmd.none
   )
 
-updates : List Msg -> Model -> (Model, Cmd Msg)
-updates msgs model =
+update : Msg -> Model -> (Model, Cmd Msg)
+update msgs model =
   case msgs of
     [] -> (model, Cmd.none)
     firstMsg :: restMsgs ->
       let
-        (nextModel, nextCmd) = update firstMsg model
-        (lastModel, lastCmd) = updates restMsgs nextModel
+        (nextModel, nextCmd) = updateOne firstMsg model
+        (lastModel, lastCmd) = update restMsgs nextModel
       in
       (lastModel, Cmd.batch [nextCmd, lastCmd])
 
-update : Msg -> Model -> (Model, Cmd Msg)
-update msg model =
+updateOne : Msg.OneMsg -> Model -> (Model, Cmd Msg)
+updateOne msg model =
   case model.state of
     Model.PreLogin preLogin ->
       let
@@ -103,7 +103,6 @@ update msg model =
         Err error -> failed (Msg.errorToString error)
         Ok Msg.ClearError -> ({ model | error = Nothing }, Cmd.none)
         Ok Msg.ClearMoveError -> (model, Cmd.none)
-        Ok (Msg.Many msgs) -> updates (List.map Ok msgs) model
         Ok (Msg.UpdateRoomCode code) -> loggedIn code
         Ok (Msg.PreLogin loginMsg) ->
           case loginMsg of
@@ -132,7 +131,6 @@ update msg model =
         Err errorMsg -> error (Msg.errorToString errorMsg)
         Ok (Msg.PreLogin _) -> error "Pre-login message after login"
         Ok Msg.ClearError -> ( { model | error = Nothing }, Cmd.none )
-        Ok (Msg.Many msgs) -> updates (List.map Ok msgs) model
         Ok (Msg.UpdateRoomCode code) ->
           ( { model | state = Model.InGame { inGame | roomCode = code } }, Cmd.none )
         Ok (Msg.ComposeMessage composed) ->
@@ -168,7 +166,7 @@ update msg model =
                 -- Generate a list of indices instead of a shuffled rack to avoid
                 -- overwriting in-flight racks from the server.
                 Random.generate
-                  (Ok << Msg.ShuffleRack << Just)
+                  (\indices -> [Ok (Msg.ShuffleRack (Just indices))])
                   (Random.List.shuffle (List.indexedMap (\i _ -> i) rack))
           )
         Ok (Msg.ShuffleRack (Just indices)) ->
@@ -197,7 +195,7 @@ update msg model =
                 Nothing -> ( model, Cmd.none )
                 Just prop ->
                   update
-                    (Ok (updateProposal game.board rack prop proposalUpdate))
+                    (updateProposal game.board rack prop proposalUpdate)
                     model
         Ok (Msg.Propose proposal) ->
           case game.playing of
@@ -263,25 +261,26 @@ update msg model =
           )
         Ok (Msg.BlurById blurId) ->
           ( model
-          , Task.attempt (\_ -> Ok Msg.doNothing) (Browser.Dom.blur blurId)
+          , Task.attempt (\_ -> Msg.doNothing) (Browser.Dom.blur blurId)
           )
         Ok (Msg.SetHelpVisible showHelp) ->
           ( setGame { game | showHelp = showHelp }, Cmd.none )
 
 updateProposal
-  : Board -> Board.Rack -> Move.Proposal -> Msg.ProposalUpdate -> Msg.OkMsg
+  : Board -> Board.Rack -> Move.Proposal -> Msg.ProposalUpdate -> Msg
 updateProposal board rack proposal proposalUpdate =
   let
     deleteLast tiles = List.take (List.length tiles - 1) tiles
-    updateMove move = Msg.Propose (Just (Move.ProposeMove move))
-    updateExchange newTiles = Msg.Propose (Just (Move.ProposeExchange newTiles))
+    propose p = [Ok (Msg.Propose p)]
+    updateMove move = propose (Just (Move.ProposeMove move))
+    updateExchange newTiles = propose (Just (Move.ProposeExchange newTiles))
     ifHave tile addTile =
       if List.member tile (Move.remainingRack proposal rack)
       then addTile
-      else Msg.SetTransientError (Just Model.RackError)
+      else [Ok (Msg.SetTransientError (Just Model.RackError))]
     cancelProposalIfEmpty tiles =
       if List.isEmpty tiles
-      then Msg.Propose Nothing
+      then propose Nothing
       else Msg.doNothing
   in
   case (proposal, proposalUpdate) of
@@ -289,7 +288,7 @@ updateProposal board rack proposal proposalUpdate =
       updateMove { move | tiles = deleteLast move.tiles }
     (Move.ProposeExchange tiles, Msg.UnproposeLast) ->
       updateExchange (deleteLast tiles)
-    (_, Msg.SubmitProposal) -> Msg.SendProposal
+    (_, Msg.SubmitProposal) -> [Ok Msg.SendProposal]
     (Move.ProposeExchange tiles, Msg.ProposeTile tile) ->
       ifHave tile (updateExchange (tiles ++ [tile]))
     (Move.ProposeMove move, Msg.ProposeTile tile) ->
@@ -298,7 +297,7 @@ updateProposal board rack proposal proposalUpdate =
         addTile moveTile = updateMove { move | tiles = move.tiles ++ [moveTile] }
       in
       case Board.get i j board of
-        Nothing -> Msg.SetTransientError (Just Model.BoardError)
+        Nothing -> [Ok (Msg.SetTransientError (Just Model.BoardError))]
         Just sq ->
           case sq.tile of
             Nothing ->
@@ -306,24 +305,25 @@ updateProposal board rack proposal proposalUpdate =
             Just squareTile ->
               if tile == squareTile
               then addTile Move.UseBoard
-              else Msg.SetTransientError (Just (Model.SquareError i j))
+              else [Ok (Msg.SetTransientError (Just (Model.SquareError i j)))]
     (Move.ProposeMove move, Msg.CancelProposal) ->
       cancelProposalIfEmpty move.tiles
     (Move.ProposeExchange tiles, Msg.CancelProposal) ->
       cancelProposalIfEmpty tiles
 
-handleKey : Json.Decode.Decoder Msg.OkMsg
+handleKey : Json.Decode.Decoder Msg
 handleKey =
   let
+    updateP u = [Ok (Msg.UpdateProposal u)]
     ofKey key =
       case key of
-        Key.Escape -> Msg.UpdateProposal Msg.CancelProposal
-        Key.Enter -> Msg.UpdateProposal Msg.SubmitProposal
-        Key.Backspace -> Msg.UpdateProposal Msg.UnproposeLast
+        Key.Escape -> updateP Msg.CancelProposal
+        Key.Enter -> updateP Msg.SubmitProposal
+        Key.Backspace -> updateP Msg.UnproposeLast
         Key.Char c ->
           case Board.tileOfChar c of
             Nothing -> Msg.doNothing
-            Just tile -> Msg.UpdateProposal (Msg.ProposeTile tile)
+            Just tile -> updateP (Msg.ProposeTile tile)
         Key.Other -> Msg.doNothing
   in
   Json.Decode.map ofKey Key.decodeKey
@@ -333,9 +333,9 @@ subscriptions model =
   let
     ifPlaying decoder =
       case model.state of
-        Model.PreLogin _ -> Json.Decode.succeed (Ok Msg.doNothing)
-        Model.InGame _ -> Json.Decode.map Ok decoder
-    clearError = ifPlaying (Json.Decode.succeed (Msg.SetTransientError Nothing))
+        Model.PreLogin _ -> Json.Decode.succeed Msg.doNothing
+        Model.InGame _ -> decoder
+    clearError = ifPlaying (Json.Decode.succeed [Ok (Msg.SetTransientError Nothing)])
   in
   Sub.batch
     [ Ports.subscriptions model
@@ -344,8 +344,8 @@ subscriptions model =
     , Browser.Events.onMouseUp clearError
     , Browser.Events.onVisibilityChange (\_ ->
           case model.state of
-            Model.PreLogin _ -> Ok Msg.doNothing
-            Model.InGame _ -> Ok (Msg.SetTransientError Nothing)
+            Model.PreLogin _ -> Msg.doNothing
+            Model.InGame _ -> [Ok (Msg.SetTransientError Nothing)]
         )
     ]
 

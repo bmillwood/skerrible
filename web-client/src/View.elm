@@ -49,7 +49,7 @@ radios { name, disabled } items =
     [ Attributes.style "list-style-type" "none" ]
     (List.map radio items)
 
-viewPreLogin : Model.PreLoginState -> Html Msg.OkMsg
+viewPreLogin : Model.PreLoginState -> Html Msg
 viewPreLogin { loginState, loginForm } =
   let
     { endpoint, username, roomCode, roomAction, roomSettings } = loginForm
@@ -161,22 +161,24 @@ viewPreLogin { loginState, loginForm } =
         , Attributes.disabled cannotSubmit
         ]
         []
+
+    preLoginMsg msg = [Ok (Msg.PreLogin msg)]
   in
   Html.form
     [ Events.onSubmit (
           if cannotSubmit
-          then Msg.doNothing
-          else Msg.PreLogin Msg.Submit
+          then []
+          else preLoginMsg Msg.Submit
         )
     ]
     [ Html.p []
         [ Html.text "Username: "
-        , Html.map Msg.PreLogin usernameInput
+        , Html.map preLoginMsg usernameInput
         ]
-    , Html.map Msg.PreLogin roomSpec
+    , Html.map preLoginMsg roomSpec
     , Html.p []
         [ Html.text "Server: "
-        , Html.map Msg.PreLogin endpointInput
+        , Html.map preLoginMsg endpointInput
         , Html.text " (default is usually correct)"
         ]
     , Html.p [] [ submitButton ]
@@ -192,7 +194,7 @@ viewTile
   :  Board.Tile
   -> DictTile Board.TileData
   -> { partOfMove : Bool, error : Bool }
-  -> Html Msg.OkMsg
+  -> Html Msg
 viewTile tile tileData { partOfMove, error } =
   let
     scoreDisplay =
@@ -203,7 +205,7 @@ viewTile tile tileData { partOfMove, error } =
       [ Attributes.style "color" (if partOfMove then "red" else "black")
       , Attributes.style "background-color" (if error then "red" else "beige")
       , Attributes.style "position" "relative"
-      , Events.onMouseDown (Msg.UpdateProposal (Msg.ProposeTile tile))
+      , Events.onMouseDown [Ok (Msg.UpdateProposal (Msg.ProposeTile tile))]
       ] ++ squareStyle
   in
   Html.td
@@ -224,7 +226,7 @@ viewBoard
      , proposedMove : Maybe Move
      , transientError : Maybe Model.TransientError
      }
-  -> Html Msg.OkMsg
+  -> Html Msg
 viewBoard { board, tileData, proposedMove, transientError } =
   let
     { top, left, squares } = board
@@ -261,7 +263,7 @@ viewBoard { board, tileData, proposedMove, transientError } =
               else Nothing
         newMove direction =
           { startRow = rowN, startCol = colN, direction = direction, tiles = [] }
-        proposeMove move = Msg.Propose (Just (Move.ProposeMove move))
+        proposeMove move = [Ok (Msg.Propose (Just (Move.ProposeMove move)))]
         attributes =
           [ [ Attributes.style "background-color" bgColor
             , Events.onClick (
@@ -269,12 +271,12 @@ viewBoard { board, tileData, proposedMove, transientError } =
                   Nothing -> proposeMove (newMove Move.Right)
                   Just { startRow, startCol, direction, tiles } ->
                     if not (List.isEmpty tiles)
-                    then Msg.doNothing
+                    then []
                     else
                       case directionIfHere of
                         Nothing -> proposeMove (newMove Move.Right)
                         Just Move.Right -> proposeMove (newMove Move.Down)
-                        Just Move.Down -> Msg.Propose Nothing
+                        Just Move.Down -> [Ok (Msg.Propose Nothing)]
               )
             ]
           , title
@@ -346,7 +348,7 @@ viewScores scores =
         ]
   )
 
-viewError : Maybe Move.Error -> Html Msg.OkMsg
+viewError : Maybe Move.Error -> Html Msg
 viewError error =
   let
     text =
@@ -371,7 +373,7 @@ viewError error =
           "There aren't enough tiles in the bag to exchange that many."
   in
   Html.div
-    [ Events.onClick Msg.ClearMoveError
+    [ Events.onClick [Ok Msg.ClearMoveError]
     , Attributes.style "color" "red"
     ]
     [ Html.text text ]
@@ -382,7 +384,7 @@ viewRack
      , proposedExchange : Maybe (List Board.Tile)
      , rackError : Bool
      }
-  -> Html Msg.OkMsg
+  -> Html Msg
 viewRack { rack, tileData, proposedExchange, rackError } =
   let
     rackTile tile =
@@ -408,16 +410,16 @@ viewRack { rack, tileData, proposedExchange, rackError } =
             ]
             [ Html.tr [] (List.map rackTile rack ++ [ spaceTd ]) ]
         , Html.button
-            [ Events.onClick (Msg.UpdateProposal Msg.UnproposeLast) ]
+            [ Events.onClick [Ok (Msg.UpdateProposal Msg.UnproposeLast)] ]
             [ Html.text "\u{232b} Backspace" ]
         , Html.button
-            [ Events.onClick (Msg.UpdateProposal Msg.SubmitProposal) ]
+            [ Events.onClick [Ok (Msg.UpdateProposal Msg.SubmitProposal)] ]
             [ Html.text "\u{21b5} Submit" ]
         ]
     , Html.p
         []
         [ Html.button
-            [ Events.onClick (Msg.ShuffleRack Nothing) ]
+            [ Events.onClick [Ok (Msg.ShuffleRack Nothing)] ]
             [ Html.text "\u{1f500} Rearrange" ]
         , let
             id = "exchangeButton"
@@ -425,11 +427,10 @@ viewRack { rack, tileData, proposedExchange, rackError } =
           Html.button
             [ Attributes.id id
             , Events.onClick (
-                Msg.Many
-                  [ Msg.Propose (Just (Move.ProposeExchange []))
-                  , -- if I don't do this the keypresses don't reach the global handler
-                    Msg.BlurById id
-                  ]
+                [ Ok (Msg.Propose (Just (Move.ProposeExchange [])))
+                , -- if I don't do this the keypresses don't reach the global handler
+                  Ok (Msg.BlurById id)
+                ]
               )
             , Attributes.disabled
               <| case proposedExchange of
@@ -444,12 +445,12 @@ viewRack { rack, tileData, proposedExchange, rackError } =
                   "Exchanging " ++ String.fromList (List.map Board.tileToChar tiles)
             ]
         , Html.button
-            [ Events.onClick Msg.SendPass ]
+            [ Events.onClick [Ok Msg.SendPass] ]
             [ Html.text "\u{1f937} Pass" ]
         ]
     ]
 
-viewChatting : Model.ChattingState -> { spectators : Set String } -> Html Msg.OkMsg
+viewChatting : Model.ChattingState -> { spectators : Set String } -> Html Msg
 viewChatting { me, messageEntry, history } { spectators } =
   let
     inputRow =
@@ -461,12 +462,12 @@ viewChatting { me, messageEntry, history } { spectators } =
         , Html.td
             []
             [ Html.form
-                [ Events.onSubmit (Msg.SendMessage messageEntry) ]
+                [ Events.onSubmit [Ok (Msg.SendMessage messageEntry)] ]
                 [ Html.input
                     [ Attributes.type_ "text"
                     , Attributes.placeholder "chat"
                     , Attributes.value messageEntry
-                    , Events.onInput Msg.ComposeMessage
+                    , Events.onInput (\s -> [Ok (Msg.ComposeMessage s)])
                     ]
                     []
                 ]
@@ -579,7 +580,7 @@ view { error, state } =
               setLink setTo =
                 Html.a
                   [ Attributes.href "#"
-                  , Events.onClick (Ok (Msg.SetHelpVisible setTo))
+                  , Events.onClick [Ok (Msg.SetHelpVisible setTo)]
                   ]
                   [ Html.text (
                       if setTo then "show help" else "hide help"
@@ -612,7 +613,7 @@ view { error, state } =
               , Html.text " "
               , Html.a
                   [ Attributes.href "#"
-                  , Events.onClick (Ok Msg.ClearError)
+                  , Events.onClick [Ok Msg.ClearError]
                   ]
                   [ Html.text "clear" ]
               ]
@@ -620,8 +621,7 @@ view { error, state } =
 
     stateDisplay =
       [ case state of
-          Model.PreLogin preLogin ->
-            Html.map Ok (viewPreLogin preLogin)
+          Model.PreLogin preLogin -> viewPreLogin preLogin
           Model.InGame { chat, game, roomCode } ->
             let
               roomCodeDisplay =
@@ -650,7 +650,7 @@ view { error, state } =
                 case game.playing of
                   Nothing ->
                     [ Html.button
-                        [ Events.onClick Msg.SendJoin ]
+                        [ Events.onClick [Ok Msg.SendJoin] ]
                         [ Html.text "Join game" ]
                     ]
                   Just { proposal, rack } ->
@@ -674,28 +674,26 @@ view { error, state } =
                   chat.folks
                   (Set.fromList (Dict.keys game.scores))
             in
-            Html.map Ok (
-                Html.div
-                  []
-                  (List.concat
-                    [ [ roomCodeDisplay
-                      , boardDisplay
-                      , viewScores game.scores
-                      , Html.div
-                          []
-                          [ Html.button
-                              [ Events.onClick Msg.SendUndo ]
-                              [ Html.text "Undo" ]
-                          ]
-                      , Html.hr [ Attributes.style "clear" "both" ] []
-                      , viewError game.moveError
+            Html.div
+              []
+              (List.concat
+                [ [ roomCodeDisplay
+                  , boardDisplay
+                  , viewScores game.scores
+                  , Html.div
+                      []
+                      [ Html.button
+                          [ Events.onClick [Ok Msg.SendUndo] ]
+                          [ Html.text "Undo" ]
                       ]
-                    , rackOrJoin
-                    , [ Html.hr [ Attributes.style "clear" "both" ] []
-                      , viewChatting chat { spectators = spectators }
-                      ]
-                    ]
-                  )
+                  , Html.hr [ Attributes.style "clear" "both" ] []
+                  , viewError game.moveError
+                  ]
+                , rackOrJoin
+                , [ Html.hr [ Attributes.style "clear" "both" ] []
+                  , viewChatting chat { spectators = spectators }
+                  ]
+                ]
               )
       ]
   in

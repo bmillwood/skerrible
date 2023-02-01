@@ -236,7 +236,7 @@ listOfPairs decodeA decodeB =
       (Json.Decode.index 1 decodeB)
   )
 
-serverMsg : Json.Decode.Decoder Msg
+serverMsg : Json.Decode.Decoder Msg.OneMsg
 serverMsg =
   let
     tooLong =
@@ -381,7 +381,7 @@ serverMsg =
     , ( "GameOver", Plain (Ok Msg.GameOver) )
     ]
 
-fromJS : Json.Decode.Decoder Msg
+fromJS : Json.Decode.Decoder Msg.OneMsg
 fromJS =
   let
     ofConnStatus status =
@@ -399,5 +399,5 @@ subscriptions : Model.Model -> Sub Msg
 subscriptions model =
   receiveFromJS <| \value ->
     case Json.Decode.decodeValue fromJS value of
-      Ok msg -> msg
-      Err error -> Err (Msg.DriverProtocolError (Json.Decode.errorToString error))
+      Ok msg -> [msg]
+      Err error -> [Err (Msg.DriverProtocolError (Json.Decode.errorToString error))]

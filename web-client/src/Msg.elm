@@ -22,8 +22,7 @@ type ProposalUpdate
   | SubmitProposal
 
 type OkMsg
-  = Many (List OkMsg)
-  | ClearError
+  = ClearError
   | PreLogin LoginFormMsg
   | UpdateRoomCode String
   | ComposeMessage String
@@ -49,9 +48,6 @@ type OkMsg
   | BlurById String
   | SetHelpVisible Bool
 
-doNothing : OkMsg
-doNothing = Many []
-
 type Error
   = ServerDisconnected
   | ServerProtocolError String
@@ -66,4 +62,9 @@ errorToString error =
     DriverProtocolError s -> "Driver protocol error: " ++ s
     ClientError s -> "Client error: " ++ s
 
-type alias Msg = Result Error OkMsg
+type alias OneMsg = Result Error OkMsg
+
+type alias Msg = List OneMsg
+
+doNothing : Msg
+doNothing = []
