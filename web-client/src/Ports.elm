@@ -249,29 +249,27 @@ serverMsg =
     techError =
       variantWithFields
         { name = "TechErrorMsg" }
-        [ ( "ProtocolError", Plain (Err (Msg.ClientError "Unspecified protocol error :(")) )
-        , ( "MustNotBeEmpty", Plain (Err (Msg.ClientError "Must not be empty")) )
-        , ( "TooLong", WithFieldsInline (Json.Decode.map (Err << Msg.ClientError) tooLong) )
+        [ ( "ProtocolError", Plain (Msg.clientError "Unspecified protocol error :(") )
+        , ( "MustNotBeEmpty", Plain (Msg.clientError "Must not be empty") )
+        , ( "TooLong", WithFieldsInline (Json.Decode.map Msg.clientError tooLong) )
         ]
 
-    roomDoesNotExist = Ok (Msg.PreLogin Msg.NoSuchRoom)
-
-    updateRoomCode = Json.Decode.map (Ok << Msg.UpdateRoomCode) Json.Decode.string
+    updateRoomCode = Json.Decode.map (Msg.PreLogin << Msg.UpdateRoomCode) Json.Decode.string
 
     people =
       Json.Decode.list Json.Decode.string
-      |> Json.Decode.map (Ok << Msg.UpdatePeople << Set.fromList)
+      |> Json.Decode.map (Msg.InGame << Msg.UpdatePeople << Set.fromList)
 
     scores =
       listOfPairs Json.Decode.string Json.Decode.int
-      |> Json.Decode.map (Ok << Msg.UpdateScores << Dict.fromList)
+      |> Json.Decode.map (Msg.InGame << Msg.UpdateScores << Dict.fromList)
 
     message =
       Json.Decode.map2
         Model.Chat
         (Json.Decode.field "chatSentBy" Json.Decode.string)
         (Json.Decode.field "chatContent" Json.Decode.string)
-      |> Json.Decode.map (Ok << Msg.ReceiveChatMessage)
+      |> Json.Decode.map (Msg.InGame << Msg.ReceiveChatMessage)
 
     playedWord =
       Json.Decode.map2
@@ -290,7 +288,7 @@ serverMsg =
     playerMoved =
       Json.Decode.map2
         (\player report ->
-          Ok (Msg.ReceiveMove { player = player, moveReport = report })
+          Msg.InGame (Msg.ReceiveMove { player = player, moveReport = report })
         )
         (Json.Decode.field "movePlayer" Json.Decode.string)
         (Json.Decode.field "moveReport" moveReport)
@@ -302,7 +300,7 @@ serverMsg =
         (Json.Decode.field "tileCount" Json.Decode.int)
     updateTileData =
       listOfPairs decodeTile tileData
-      |> Json.Decode.map (Ok << Msg.UpdateTileData << DictTile.fromList)
+      |> Json.Decode.map (Msg.InGame << Msg.UpdateTileData << DictTile.fromList)
 
     posSquare =
       Json.Decode.map3
@@ -333,11 +331,11 @@ serverMsg =
           { top = top, left = left, squares = squares }
     updateBoard =
       Json.Decode.list posSquare
-      |> Json.Decode.map (Ok << Msg.UpdateBoard << ofPosSquares)
+      |> Json.Decode.map (Msg.InGame << Msg.UpdateBoard << ofPosSquares)
 
     updateRack =
       Json.Decode.list decodeTile
-      |> Json.Decode.map (Ok << Msg.UpdateRack)
+      |> Json.Decode.map (Msg.InGame << Msg.UpdateRack)
 
     moveError =
       variantWithFields
@@ -363,12 +361,12 @@ serverMsg =
     moveOk = Json.Decode.succeed ()
     moveResult =
       eitherResult moveError moveOk
-      |> Json.Decode.map (Ok << Msg.MoveResult)
+      |> Json.Decode.map (Msg.InGame << Msg.MoveResult)
   in
   variantWithFields
     { name = "serverMsg" }
     [ ( "TechnicalError" , WithContents techError )
-    , ( "RoomDoesNotExist", Plain roomDoesNotExist )
+    , ( "RoomDoesNotExist", Plain (Msg.PreLogin Msg.NoSuchRoom) )
     , ( "UpdateRoomCode", WithContents updateRoomCode )
     , ( "People", WithContents people )
     , ( "Scores", WithContents scores )
@@ -378,7 +376,7 @@ serverMsg =
     , ( "UpdateBoard", WithContents updateBoard )
     , ( "UpdateRack", WithContents updateRack )
     , ( "MoveResult", WithContents moveResult )
-    , ( "GameOver", Plain (Ok Msg.GameOver) )
+    , ( "GameOver", Plain (Msg.InGame Msg.GameOver) )
     ]
 
 fromJS : Json.Decode.Decoder Msg.OneMsg
@@ -386,8 +384,8 @@ fromJS =
   let
     ofConnStatus status =
       case status of
-        Connected -> Ok (Msg.PreLogin Msg.Connected)
-        Disconnected -> Err Msg.ServerDisconnected
+        Connected -> Msg.PreLogin Msg.Connected
+        Disconnected -> Msg.serverDisconnected
   in
   variantWithFields
     { name = "fromJS" }
@@ -400,4 +398,4 @@ subscriptions model =
   receiveFromJS <| \value ->
     case Json.Decode.decodeValue fromJS value of
       Ok msg -> [msg]
-      Err error -> [Err (Msg.DriverProtocolError (Json.Decode.errorToString error))]
+      Err error -> [Msg.driverProtocolError (Json.Decode.errorToString error)]

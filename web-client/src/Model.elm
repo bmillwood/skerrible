@@ -88,7 +88,6 @@ type State
   = PreLogin PreLoginState
   | InGame { roomCode : String, chat : ChattingState, game : Game }
 
-type alias Model =
-  { error : Maybe String
-  , state : State
-  }
+type alias WithError state = { error : Maybe String, state : state }
+
+type alias Model = WithError State

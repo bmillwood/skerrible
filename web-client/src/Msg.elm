@@ -9,10 +9,15 @@ import Key exposing (Key)
 import Model
 import Move exposing (Move)
 
+type GlobalMsg
+  = SetError (Maybe String)
+  | BlurById String
+
 type LoginFormMsg
   = Update Model.LoginForm
   | Submit
   | Connected
+  | UpdateRoomCode String
   | NoSuchRoom
 
 type ProposalUpdate
@@ -21,11 +26,8 @@ type ProposalUpdate
   | CancelProposal
   | SubmitProposal
 
-type OkMsg
-  = ClearError
-  | PreLogin LoginFormMsg
-  | UpdateRoomCode String
-  | ComposeMessage String
+type GameMsg
+  = ComposeMessage String
   | SendMessage String
   | ReceiveChatMessage Model.Chat
   | SendJoin
@@ -45,24 +47,27 @@ type OkMsg
   | GameOver
   | ClearMoveError
   | SetTransientError (Maybe Model.TransientError)
-  | BlurById String
   | SetHelpVisible Bool
 
-type Error
-  = ServerDisconnected
-  | ServerProtocolError String
-  | DriverProtocolError String
-  | ClientError String
+type OneMsg
+  = Global GlobalMsg
+  | PreLogin LoginFormMsg
+  | InGame GameMsg
 
-errorToString : Error -> String
-errorToString error =
-  case error of
-    ServerDisconnected -> "Server disconnected"
-    ServerProtocolError s -> "Server protocol error: " ++ s
-    DriverProtocolError s -> "Driver protocol error: " ++ s
-    ClientError s -> "Client error: " ++ s
+error : String -> OneMsg
+error e = Global (SetError (Just e))
 
-type alias OneMsg = Result Error OkMsg
+serverDisconnected : OneMsg
+serverDisconnected = error "Server disconnected"
+
+serverProtocolError : String -> OneMsg
+serverProtocolError s = error ("Server protocol error: " ++ s)
+
+driverProtocolError : String -> OneMsg
+driverProtocolError s = error ("Driver protocol error: " ++ s)
+
+clientError : String -> OneMsg
+clientError s = error ("Client error: " ++ s)
 
 type alias Msg = List OneMsg
 

@@ -162,7 +162,7 @@ viewPreLogin { loginState, loginForm } =
         ]
         []
 
-    preLoginMsg msg = [Ok (Msg.PreLogin msg)]
+    preLoginMsg msg = [Msg.PreLogin msg]
   in
   Html.form
     [ Events.onSubmit (
@@ -205,7 +205,7 @@ viewTile tile tileData { partOfMove, error } =
       [ Attributes.style "color" (if partOfMove then "red" else "black")
       , Attributes.style "background-color" (if error then "red" else "beige")
       , Attributes.style "position" "relative"
-      , Events.onMouseDown [Ok (Msg.UpdateProposal (Msg.ProposeTile tile))]
+      , Events.onMouseDown [Msg.InGame (Msg.UpdateProposal (Msg.ProposeTile tile))]
       ] ++ squareStyle
   in
   Html.td
@@ -263,7 +263,7 @@ viewBoard { board, tileData, proposedMove, transientError } =
               else Nothing
         newMove direction =
           { startRow = rowN, startCol = colN, direction = direction, tiles = [] }
-        proposeMove move = [Ok (Msg.Propose (Just (Move.ProposeMove move)))]
+        proposeMove move = [Msg.InGame (Msg.Propose (Just (Move.ProposeMove move)))]
         attributes =
           [ [ Attributes.style "background-color" bgColor
             , Events.onClick (
@@ -276,7 +276,7 @@ viewBoard { board, tileData, proposedMove, transientError } =
                       case directionIfHere of
                         Nothing -> proposeMove (newMove Move.Right)
                         Just Move.Right -> proposeMove (newMove Move.Down)
-                        Just Move.Down -> [Ok (Msg.Propose Nothing)]
+                        Just Move.Down -> [Msg.InGame (Msg.Propose Nothing)]
               )
             ]
           , title
@@ -373,7 +373,7 @@ viewError error =
           "There aren't enough tiles in the bag to exchange that many."
   in
   Html.div
-    [ Events.onClick [Ok Msg.ClearMoveError]
+    [ Events.onClick [Msg.InGame Msg.ClearMoveError]
     , Attributes.style "color" "red"
     ]
     [ Html.text text ]
@@ -410,16 +410,16 @@ viewRack { rack, tileData, proposedExchange, rackError } =
             ]
             [ Html.tr [] (List.map rackTile rack ++ [ spaceTd ]) ]
         , Html.button
-            [ Events.onClick [Ok (Msg.UpdateProposal Msg.UnproposeLast)] ]
+            [ Events.onClick [Msg.InGame (Msg.UpdateProposal Msg.UnproposeLast)] ]
             [ Html.text "\u{232b} Backspace" ]
         , Html.button
-            [ Events.onClick [Ok (Msg.UpdateProposal Msg.SubmitProposal)] ]
+            [ Events.onClick [Msg.InGame (Msg.UpdateProposal Msg.SubmitProposal)] ]
             [ Html.text "\u{21b5} Submit" ]
         ]
     , Html.p
         []
         [ Html.button
-            [ Events.onClick [Ok (Msg.ShuffleRack Nothing)] ]
+            [ Events.onClick [Msg.InGame (Msg.ShuffleRack Nothing)] ]
             [ Html.text "\u{1f500} Rearrange" ]
         , let
             id = "exchangeButton"
@@ -427,9 +427,9 @@ viewRack { rack, tileData, proposedExchange, rackError } =
           Html.button
             [ Attributes.id id
             , Events.onClick (
-                [ Ok (Msg.Propose (Just (Move.ProposeExchange [])))
+                [ Msg.InGame (Msg.Propose (Just (Move.ProposeExchange [])))
                 , -- if I don't do this the keypresses don't reach the global handler
-                  Ok (Msg.BlurById id)
+                  Msg.Global (Msg.BlurById id)
                 ]
               )
             , Attributes.disabled
@@ -445,7 +445,7 @@ viewRack { rack, tileData, proposedExchange, rackError } =
                   "Exchanging " ++ String.fromList (List.map Board.tileToChar tiles)
             ]
         , Html.button
-            [ Events.onClick [Ok Msg.SendPass] ]
+            [ Events.onClick [Msg.InGame Msg.SendPass] ]
             [ Html.text "\u{1f937} Pass" ]
         ]
     ]
@@ -462,12 +462,12 @@ viewChatting { me, messageEntry, history } { spectators } =
         , Html.td
             []
             [ Html.form
-                [ Events.onSubmit [Ok (Msg.SendMessage messageEntry)] ]
+                [ Events.onSubmit [Msg.InGame (Msg.SendMessage messageEntry)] ]
                 [ Html.input
                     [ Attributes.type_ "text"
                     , Attributes.placeholder "chat"
                     , Attributes.value messageEntry
-                    , Events.onInput (\s -> [Ok (Msg.ComposeMessage s)])
+                    , Events.onInput (\s -> [Msg.InGame (Msg.ComposeMessage s)])
                     ]
                     []
                 ]
@@ -580,7 +580,7 @@ view { error, state } =
               setLink setTo =
                 Html.a
                   [ Attributes.href "#"
-                  , Events.onClick [Ok (Msg.SetHelpVisible setTo)]
+                  , Events.onClick [Msg.InGame (Msg.SetHelpVisible setTo)]
                   ]
                   [ Html.text (
                       if setTo then "show help" else "hide help"
@@ -613,7 +613,7 @@ view { error, state } =
               , Html.text " "
               , Html.a
                   [ Attributes.href "#"
-                  , Events.onClick [Ok Msg.ClearError]
+                  , Events.onClick [Msg.Global (Msg.SetError Nothing)]
                   ]
                   [ Html.text "clear" ]
               ]
@@ -650,7 +650,7 @@ view { error, state } =
                 case game.playing of
                   Nothing ->
                     [ Html.button
-                        [ Events.onClick [Ok Msg.SendJoin] ]
+                        [ Events.onClick [Msg.InGame Msg.SendJoin] ]
                         [ Html.text "Join game" ]
                     ]
                   Just { proposal, rack } ->
@@ -683,7 +683,7 @@ view { error, state } =
                   , Html.div
                       []
                       [ Html.button
-                          [ Events.onClick [Ok Msg.SendUndo] ]
+                          [ Events.onClick [Msg.InGame Msg.SendUndo] ]
                           [ Html.text "Undo" ]
                       ]
                   , Html.hr [ Attributes.style "clear" "both" ] []

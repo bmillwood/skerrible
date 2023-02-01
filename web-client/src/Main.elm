@@ -47,7 +47,7 @@ init rawFlags =
           }
     }
   , if autoLogin
-    then Task.perform identity (Task.succeed [Ok (Msg.PreLogin Msg.Submit)])
+    then Task.perform identity (Task.succeed [Msg.PreLogin Msg.Submit])
     else Cmd.none
   )
 
@@ -62,103 +62,115 @@ update msgs model =
       in
       (lastModel, Cmd.batch [nextCmd, lastCmd])
 
+updatePreLogin : Msg.LoginFormMsg -> Model.WithError Model.PreLoginState -> (Model, Cmd Msg)
+updatePreLogin msg { error, state } =
+  let
+    set newPreLogin = { state = Model.PreLogin newPreLogin, error = error }
+    failed newError =
+      ( { state = Model.PreLogin { state | loginState = Model.Failed }
+        , error = Just newError
+        }
+      , Cmd.none
+      )
+  in
+  case msg of
+    Msg.UpdateRoomCode code ->
+      ( { state =
+            Model.InGame
+              { chat =
+                  { folks = Set.empty
+                  , me = state.loginForm.username
+                  , messageEntry = ""
+                  , history = []
+                  }
+              , game =
+                  { board = Board.empty
+                  , tileData = DictTile.empty
+                  , scores = Dict.empty
+                  , playing = Nothing
+                  , moveError = Nothing
+                  , transientError = Nothing
+                  , showHelp = True
+                  }
+              , roomCode = code
+              }
+        , error = Nothing
+        }
+      , Cmd.none
+      )
+    Msg.Update newForm ->
+      ( set { state | loginForm = newForm }, Cmd.none )
+    Msg.Submit ->
+      ( set { state | loginState = Model.Waiting }
+      , Ports.connect { endpoint = state.loginForm.endpoint }
+      )
+    Msg.Connected ->
+      ( set state
+      , Ports.login state.loginForm
+      )
+    Msg.NoSuchRoom ->
+      failed "Room does not exist"
+
 updateOne : Msg.OneMsg -> Model -> (Model, Cmd Msg)
 updateOne msg model =
-  case model.state of
-    Model.PreLogin preLogin ->
+  case (model.state, msg) of
+    (_, Msg.Global (Msg.SetError e)) ->
+      ( { model | error = e }, Cmd.none )
+    (_, Msg.Global (Msg.BlurById blurId)) ->
+      ( model
+      , Task.attempt (\_ -> Msg.doNothing) (Browser.Dom.blur blurId)
+      )
+    (Model.PreLogin preLogin, Msg.PreLogin loginFormMsg) ->
       let
-        set newPreLogin = { model | state = Model.PreLogin newPreLogin }
-        failed error =
-          ( { model
-            | state = Model.PreLogin { preLogin | loginState = Model.Failed }
-            , error = Just error
-            }
-          , Cmd.none
-          )
-        loggedIn roomCode =
-          ( { model | state =
-                Model.InGame
-                  { chat =
-                      { folks = Set.empty
-                      , me = preLogin.loginForm.username
-                      , messageEntry = ""
-                      , history = []
-                      }
-                  , game =
-                      { board = Board.empty
-                      , tileData = DictTile.empty
-                      , scores = Dict.empty
-                      , playing = Nothing
-                      , moveError = Nothing
-                      , transientError = Nothing
-                      , showHelp = True
-                      }
-                  , roomCode = roomCode
-                  }
-            }
-          , Cmd.none
-          )
+        (newModel, newCmd) =
+          updatePreLogin loginFormMsg { state = preLogin, error = model.error }
       in
-      case msg of
-        Err error -> failed (Msg.errorToString error)
-        Ok Msg.ClearError -> ({ model | error = Nothing }, Cmd.none)
-        Ok Msg.ClearMoveError -> (model, Cmd.none)
-        Ok (Msg.UpdateRoomCode code) -> loggedIn code
-        Ok (Msg.PreLogin loginMsg) ->
-          case loginMsg of
-            Msg.Update newForm ->
-              ( set { preLogin | loginForm = newForm }, Cmd.none )
-            Msg.Submit ->
-              ( set { preLogin | loginState = Model.Waiting }
-              , Ports.connect { endpoint = preLogin.loginForm.endpoint }
-              )
-            Msg.Connected ->
-              ( model
-              , Ports.login preLogin.loginForm
-              )
-            Msg.NoSuchRoom ->
-              failed "Room does not exist"
-        Ok other ->
-          failed ("Ingame-only message outside of game: " ++ Debug.toString other)
-    Model.InGame ({ chat, game } as inGame) ->
+      ( { newModel
+        | error = Maybe.withDefault model.error (Maybe.map Just newModel.error)
+        }
+      , newCmd
+      )
+    (Model.PreLogin _, _) ->
+      ( { model | error = Just "Bug: inappropriate message type for pre-login state" }
+      , Cmd.none
+      )
+    (Model.InGame ({ chat, game } as inGame), Msg.PreLogin _) ->
+      ( { model | error = Just "Bug: inappropriate message type for in-game state" }
+      , Cmd.none
+      )
+    (Model.InGame ({ chat, game } as inGame), Msg.InGame gameMsg) ->
       let
         setChat newChat = { model | state = Model.InGame { inGame | chat = newChat } }
         setGame newGame = { model | state = Model.InGame { inGame | game = newGame } }
         setPlaying newPlaying = setGame { game | playing = Just newPlaying }
-        error errorMsg = ( { model | error = Just errorMsg }, Cmd.none )
       in
-      case msg of
-        Err errorMsg -> error (Msg.errorToString errorMsg)
-        Ok (Msg.PreLogin _) -> error "Pre-login message after login"
-        Ok Msg.ClearError -> ( { model | error = Nothing }, Cmd.none )
-        Ok (Msg.UpdateRoomCode code) ->
-          ( { model | state = Model.InGame { inGame | roomCode = code } }, Cmd.none )
-        Ok (Msg.ComposeMessage composed) ->
+      case gameMsg of
+        Msg.ComposeMessage composed ->
           ( setChat { chat | messageEntry = composed }, Cmd.none )
-        Ok (Msg.SendMessage message) ->
+        Msg.SendMessage message ->
           ( setChat { chat | messageEntry = "" }
           , Ports.chat message
           )
-        Ok (Msg.ReceiveChatMessage chatMsg) ->
+        Msg.ReceiveChatMessage chatMsg ->
           ( setChat { chat | history = Model.Chatted chatMsg :: chat.history }
           , Cmd.none
           )
-        Ok Msg.SendJoin -> ( model, Ports.joinGame )
-        Ok (Msg.ReceiveMove moveReport) ->
+        Msg.SendJoin -> ( model, Ports.joinGame )
+        Msg.ReceiveMove moveReport ->
           ( setChat { chat | history = Model.PlayerMoved moveReport :: chat.history }
           , Cmd.none
           )
-        Ok Msg.GameOver ->
+        Msg.GameOver ->
           ( setChat { chat | history = Model.GameOver :: chat.history }
           , Cmd.none
           )
-        Ok (Msg.UpdateBoard newBoard) ->
+        Msg.UpdateBoard newBoard ->
           ( setGame { game | board = newBoard }, Cmd.none )
-        Ok (Msg.UpdateTileData tileData) ->
+        Msg.UpdateTileData tileData ->
           ( setGame { game | tileData = tileData }, Cmd.none )
-        Ok (Msg.UpdateRack newRack) ->
+        Msg.UpdateRack newRack ->
           ( setPlaying { rack = newRack, proposal = Nothing }, Cmd.none )
-        Ok (Msg.ShuffleRack Nothing) ->
+        Msg.ShuffleRack Nothing ->
           ( model
           , case game.playing of
               Nothing -> Cmd.none
@@ -166,10 +178,10 @@ updateOne msg model =
                 -- Generate a list of indices instead of a shuffled rack to avoid
                 -- overwriting in-flight racks from the server.
                 Random.generate
-                  (\indices -> [Ok (Msg.ShuffleRack (Just indices))])
+                  (\indices -> [Msg.InGame (Msg.ShuffleRack (Just indices))])
                   (Random.List.shuffle (List.indexedMap (\i _ -> i) rack))
           )
-        Ok (Msg.ShuffleRack (Just indices)) ->
+        Msg.ShuffleRack (Just indices) ->
           case game.playing of
             Nothing -> ( model, Cmd.none )
             Just ({ rack } as playing) ->
@@ -185,9 +197,9 @@ updateOne msg model =
               else
                 -- Ignoring is fine. You can just click the button again.
                 ( model, Cmd.none )
-        Ok (Msg.SetTransientError newTransientError) ->
+        Msg.SetTransientError newTransientError ->
           ( setGame { game | transientError = newTransientError }, Cmd.none )
-        Ok (Msg.UpdateProposal proposalUpdate) ->
+        Msg.UpdateProposal proposalUpdate ->
           case game.playing of
             Nothing -> ( model, Cmd.none )
             Just { proposal, rack } ->
@@ -197,21 +209,21 @@ updateOne msg model =
                   update
                     (updateProposal game.board rack prop proposalUpdate)
                     model
-        Ok (Msg.Propose proposal) ->
+        Msg.Propose proposal ->
           case game.playing of
             Nothing -> ( model, Cmd.none )
             Just playing ->
               ( setPlaying { playing | proposal = proposal }, Cmd.none )
-        Ok Msg.SendProposal ->
+        Msg.SendProposal ->
           case game.playing |> Maybe.andThen .proposal of
             Nothing -> ( model, Cmd.none )
             Just (Move.ProposeMove move) -> ( model, Ports.sendMove move )
             Just (Move.ProposeExchange tiles) -> ( model, Ports.sendExchange tiles )
-        Ok Msg.SendPass -> ( model, Ports.sendPass )
-        Ok Msg.SendUndo -> ( model, Ports.sendUndo )
-        Ok (Msg.MoveResult (Err moveError)) ->
+        Msg.SendPass -> ( model, Ports.sendPass )
+        Msg.SendUndo -> ( model, Ports.sendUndo )
+        Msg.MoveResult (Err moveError) ->
           ( setGame { game | moveError = Just moveError }, Cmd.none )
-        Ok (Msg.MoveResult (Ok ())) ->
+        Msg.MoveResult (Ok ()) ->
           let
             newPlaying =
               case game.playing of
@@ -219,9 +231,9 @@ updateOne msg model =
                 Just { rack } -> Just { rack = rack, proposal = Nothing }
           in
           ( setGame { game | moveError = Nothing, playing = newPlaying }, Cmd.none )
-        Ok Msg.ClearMoveError ->
+        Msg.ClearMoveError ->
           ( setGame { game | moveError = Nothing }, Cmd.none )
-        Ok (Msg.UpdatePeople newFolks) ->
+        Msg.UpdatePeople newFolks ->
           let
             added =
               Set.diff newFolks chat.folks
@@ -242,7 +254,7 @@ updateOne msg model =
             }
           , Cmd.none
           )
-        Ok (Msg.UpdateScores newScores) ->
+        Msg.UpdateScores newScores ->
           let
             newPlayers =
               Set.diff
@@ -259,11 +271,7 @@ updateOne msg model =
             }
           , Cmd.none
           )
-        Ok (Msg.BlurById blurId) ->
-          ( model
-          , Task.attempt (\_ -> Msg.doNothing) (Browser.Dom.blur blurId)
-          )
-        Ok (Msg.SetHelpVisible showHelp) ->
+        Msg.SetHelpVisible showHelp ->
           ( setGame { game | showHelp = showHelp }, Cmd.none )
 
 updateProposal
@@ -271,13 +279,13 @@ updateProposal
 updateProposal board rack proposal proposalUpdate =
   let
     deleteLast tiles = List.take (List.length tiles - 1) tiles
-    propose p = [Ok (Msg.Propose p)]
+    propose p = [Msg.InGame (Msg.Propose p)]
     updateMove move = propose (Just (Move.ProposeMove move))
     updateExchange newTiles = propose (Just (Move.ProposeExchange newTiles))
     ifHave tile addTile =
       if List.member tile (Move.remainingRack proposal rack)
       then addTile
-      else [Ok (Msg.SetTransientError (Just Model.RackError))]
+      else [Msg.InGame (Msg.SetTransientError (Just Model.RackError))]
     cancelProposalIfEmpty tiles =
       if List.isEmpty tiles
       then propose Nothing
@@ -288,7 +296,7 @@ updateProposal board rack proposal proposalUpdate =
       updateMove { move | tiles = deleteLast move.tiles }
     (Move.ProposeExchange tiles, Msg.UnproposeLast) ->
       updateExchange (deleteLast tiles)
-    (_, Msg.SubmitProposal) -> [Ok Msg.SendProposal]
+    (_, Msg.SubmitProposal) -> [Msg.InGame Msg.SendProposal]
     (Move.ProposeExchange tiles, Msg.ProposeTile tile) ->
       ifHave tile (updateExchange (tiles ++ [tile]))
     (Move.ProposeMove move, Msg.ProposeTile tile) ->
@@ -297,7 +305,7 @@ updateProposal board rack proposal proposalUpdate =
         addTile moveTile = updateMove { move | tiles = move.tiles ++ [moveTile] }
       in
       case Board.get i j board of
-        Nothing -> [Ok (Msg.SetTransientError (Just Model.BoardError))]
+        Nothing -> [Msg.InGame (Msg.SetTransientError (Just Model.BoardError))]
         Just sq ->
           case sq.tile of
             Nothing ->
@@ -305,7 +313,7 @@ updateProposal board rack proposal proposalUpdate =
             Just squareTile ->
               if tile == squareTile
               then addTile Move.UseBoard
-              else [Ok (Msg.SetTransientError (Just (Model.SquareError i j)))]
+              else [Msg.InGame (Msg.SetTransientError (Just (Model.SquareError i j)))]
     (Move.ProposeMove move, Msg.CancelProposal) ->
       cancelProposalIfEmpty move.tiles
     (Move.ProposeExchange tiles, Msg.CancelProposal) ->
@@ -314,7 +322,7 @@ updateProposal board rack proposal proposalUpdate =
 handleKey : Json.Decode.Decoder Msg
 handleKey =
   let
-    updateP u = [Ok (Msg.UpdateProposal u)]
+    updateP u = [Msg.InGame (Msg.UpdateProposal u)]
     ofKey key =
       case key of
         Key.Escape -> updateP Msg.CancelProposal
@@ -335,7 +343,7 @@ subscriptions model =
       case model.state of
         Model.PreLogin _ -> Json.Decode.succeed Msg.doNothing
         Model.InGame _ -> decoder
-    clearError = ifPlaying (Json.Decode.succeed [Ok (Msg.SetTransientError Nothing)])
+    clearError = ifPlaying (Json.Decode.succeed [Msg.InGame (Msg.SetTransientError Nothing)])
   in
   Sub.batch
     [ Ports.subscriptions model
@@ -345,7 +353,7 @@ subscriptions model =
     , Browser.Events.onVisibilityChange (\_ ->
           case model.state of
             Model.PreLogin _ -> Msg.doNothing
-            Model.InGame _ -> [Ok (Msg.SetTransientError Nothing)]
+            Model.InGame _ -> [Msg.InGame (Msg.SetTransientError Nothing)]
         )
     ]
 
