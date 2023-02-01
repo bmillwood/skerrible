@@ -1,6 +1,7 @@
 module View exposing (view)
 
 import Array
+import Browser
 import Dict exposing (Dict)
 import Html exposing (Html)
 import Html.Attributes as Attributes
@@ -562,7 +563,7 @@ viewHelp =
         ]
     ]
 
-view : Model.Model -> Html Msg
+view : Model.Model -> Browser.Document Msg
 view { error, state } =
   let
     title =
@@ -698,6 +699,6 @@ view { error, state } =
               )
       ]
   in
-  Html.div
-    []
-    (title ++ errorDisplay ++ stateDisplay)
+  { title = "Skerrible"
+  , body = title ++ errorDisplay ++ stateDisplay
+  }

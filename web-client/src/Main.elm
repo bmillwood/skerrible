@@ -51,9 +51,6 @@ init rawFlags =
     else Cmd.none
   )
 
-view : Model -> Html Msg
-view = View.view
-
 updates : List Msg -> Model -> (Model, Cmd Msg)
 updates msgs model =
   case msgs of
@@ -353,9 +350,9 @@ subscriptions model =
     ]
 
 main =
-  Browser.element
+  Browser.document
     { init          = init
-    , view          = view
+    , view          = View.view
     , update        = update
     , subscriptions = subscriptions
     }
