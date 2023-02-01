@@ -117,8 +117,8 @@ update msg model =
               ( model
               , Ports.login preLogin.loginForm
               )
-            Msg.Failed error ->
-              failed error
+            Msg.NoSuchRoom ->
+              failed "Room does not exist"
         Ok other ->
           failed ("Ingame-only message outside of game: " ++ Debug.toString other)
     Model.InGame ({ chat, game } as inGame) ->

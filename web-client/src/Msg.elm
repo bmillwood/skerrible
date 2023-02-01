@@ -13,7 +13,7 @@ type LoginFormMsg
   = Update Model.LoginForm
   | Submit
   | Connected
-  | Failed String
+  | NoSuchRoom
 
 type ProposalUpdate
   = ProposeTile Board.Tile

@@ -254,7 +254,7 @@ serverMsg =
         , ( "TooLong", WithFieldsInline (Json.Decode.map (Err << Msg.ClientError) tooLong) )
         ]
 
-    roomDoesNotExist = Ok (Msg.PreLogin (Msg.Failed "Room does not exist"))
+    roomDoesNotExist = Ok (Msg.PreLogin Msg.NoSuchRoom)
 
     updateRoomCode = Json.Decode.map (Ok << Msg.UpdateRoomCode) Json.Decode.string
 
