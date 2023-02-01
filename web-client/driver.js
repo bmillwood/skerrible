@@ -1,6 +1,6 @@
 var socket;
 var app = Elm.Main.init({
-    flags: { location: window.location }
+    // flags: {}
 });
 app.ports.sendToJS.subscribe(function(request) {
     switch(request.kind) {

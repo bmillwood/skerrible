@@ -1,11 +1,10 @@
-module FlagsParser exposing (..)
+module UrlParser exposing (..)
 
 import Dict
-import Json.Decode
 import Result exposing (Result)
 import Tuple
 
-import Url
+import Url exposing (Url)
 import Url.Parser
 import Url.Parser.Query
 
@@ -64,49 +63,34 @@ protocolWorkaround { replaceWith } url =
     protocol :: _ ->
       (protocol, replaceWith ++ String.dropLeft (String.length protocol) url)
 
-parseHref : String -> Result String Flags
-parseHref href =
+parseUrl : Url -> Flags
+parseUrl url =
   let
-    (originalProtocol, replaced) =
-      protocolWorkaround { replaceWith = "https" } href
-
     websocketProtocol =
-      if originalProtocol == "https"
+      if url.protocol == Url.Https
       then "wss"
       else "ws"
 
-    endpointForUrl url =
+    endpoint =
       { url | query = Nothing, fragment = Nothing }
       |> Url.toString
       |> protocolWorkaround { replaceWith = websocketProtocol }
       |> Tuple.second
-  in
-  Url.fromString replaced
-  |> Result.fromMaybe ("Url parsing failed on: " ++ href)
-  |> Result.andThen (\url ->
-      Url.Parser.parse (Url.Parser.query queryParser) { url | path = "" }
-      |> Result.fromMaybe ("Query parser failed on url: " ++ Url.toString url)
-      |> Result.map (\{ username, room, autoLogin, turns } ->
-          { error = Nothing
-          , username = Maybe.withDefault defaults.username username
-          , room = room
-          , autoLogin = Maybe.withDefault defaults.autoLogin autoLogin
-          , endpoint = endpointForUrl url
-          , turns = Maybe.withDefault defaults.turns turns
-          }
-        )
-    )
 
-parseFlags : Json.Decode.Value -> Flags
-parseFlags rawFlags =
-  let
-    parsedUrl =
-      Json.Decode.decodeValue
-        (Json.Decode.at ["location", "href"] Json.Decode.string)
-        rawFlags
-      |> Result.mapError Json.Decode.errorToString
-      |> Result.andThen parseHref
+    handleError result =
+      case result of
+        Err e -> { defaults | error = Just e }
+        Ok flags -> flags
   in
-  case parsedUrl of
-    Err msg -> { defaults | error = Just msg }
-    Ok flags -> flags
+  Url.Parser.parse (Url.Parser.query queryParser) { url | path = "" }
+  |> Result.fromMaybe ("Query parser failed on url: " ++ Url.toString url)
+  |> Result.map (\{ username, room, autoLogin, turns } ->
+      { error = Nothing
+      , username = Maybe.withDefault defaults.username username
+      , room = room
+      , autoLogin = Maybe.withDefault defaults.autoLogin autoLogin
+      , endpoint = endpoint
+      , turns = Maybe.withDefault defaults.turns turns
+      }
+    )
+  |> handleError

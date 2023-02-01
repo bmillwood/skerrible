@@ -15,19 +15,19 @@ import Url exposing (Url)
 
 import Board exposing (Board)
 import DictTile
-import FlagsParser
 import Key exposing (Key)
 import Model exposing (Model)
 import Move exposing (Move)
 import Msg exposing (Msg)
 import Ports
+import UrlParser
 import View
 
-init : Json.Decode.Value -> Url -> Browser.Navigation.Key -> (Model, Cmd Msg)
-init rawFlags url navKey =
+init : () -> Url -> Browser.Navigation.Key -> (Model, Cmd Msg)
+init () url navKey =
   let
     { error, endpoint, username, room, autoLogin, turns }
-      = FlagsParser.parseFlags rawFlags
+      = UrlParser.parseUrl url
   in
   ( { error = error
     , navKey = navKey
