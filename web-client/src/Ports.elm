@@ -254,7 +254,10 @@ serverMsg =
         , ( "TooLong", WithFieldsInline (Json.Decode.map Msg.clientError tooLong) )
         ]
 
-    updateRoomCode = Json.Decode.map (Msg.PreLogin << Msg.UpdateRoomCode) Json.Decode.string
+    updateRoomCode =
+      Json.Decode.map
+        (\code -> Msg.PreLogin (Msg.EnterRoom { code = code }))
+        Json.Decode.string
 
     people =
       Json.Decode.list Json.Decode.string

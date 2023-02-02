@@ -21,7 +21,7 @@ type LoginFormMsg
   = Update Model.LoginForm
   | Submit
   | Connected
-  | UpdateRoomCode String
+  | EnterRoom { code : String }
   | NoSuchRoom
 
 type ProposalUpdate

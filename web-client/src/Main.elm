@@ -80,7 +80,7 @@ updatePreLogin msg model state =
       )
   in
   case msg of
-    Msg.UpdateRoomCode code ->
+    Msg.EnterRoom { code } ->
       ( { model
         | state =
             Model.InRoom
