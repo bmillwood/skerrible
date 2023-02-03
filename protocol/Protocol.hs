@@ -155,6 +155,7 @@ instance Aeson.ToJSON RoomSpec
 data FromClient
   = LoginRequest { loginRequestName :: Username, roomSpec :: RoomSpec }
   | JoinGame
+  | StartNewGame
   | Chat { msgToSend :: Text }
   | MakeMove Move
   | Exchange (NonEmpty Tile)
@@ -214,6 +215,7 @@ data ToClient
   | UpdateRack Rack
   | MoveResult (Either MoveError ())
   | GameOver
+  | NewGameStarted { gameStartedBy :: Username }
   deriving (Generic, Show)
 
 instance Aeson.FromJSON ToClient

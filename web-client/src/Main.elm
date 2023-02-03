@@ -146,6 +146,10 @@ updateRoom msg model ({ chat, game } as state) =
       ( setChat { chat | history = Model.GameOver :: chat.history }
       , Cmd.none
       )
+    Msg.NewGameStarted { by } ->
+      ( setChat { chat | history = Model.NewGameStarted { by = by } :: chat.history }
+      , Cmd.none
+      )
     Msg.UpdateBoard newBoard ->
       ( setGame { game | board = newBoard }, Cmd.none )
     Msg.UpdateTileData tileData ->
@@ -203,6 +207,7 @@ updateRoom msg model ({ chat, game } as state) =
         Just (Move.ProposeExchange tiles) -> ( model, Ports.sendExchange tiles )
     Msg.SendPass -> ( model, Ports.sendPass )
     Msg.SendUndo -> ( model, Ports.sendUndo )
+    Msg.SendStartNewGame -> ( model, Ports.startNewGame )
     Msg.MoveResult (Err moveError) ->
       ( setGame { game | moveError = Just moveError }, Cmd.none )
     Msg.MoveResult (Ok ()) ->

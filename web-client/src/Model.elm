@@ -47,6 +47,7 @@ type Message
   | Chatted Chat
   | PlayerMoved { player : String, moveReport : MoveReport }
   | GameOver
+  | NewGameStarted { by : String }
 
 type RoomAction
   = JoinRoom

@@ -67,6 +67,9 @@ login { username, roomAction, roomCode, roomSettings } =
 joinGame : Cmd msg
 joinGame = send (withTag "JoinGame" [])
 
+startNewGame : Cmd msg
+startNewGame = send (withTag "StartNewGame" [])
+
 chat : String -> Cmd msg
 chat message =
   withTag "Chat" [("msgToSend", Json.Encode.string message)]
@@ -365,6 +368,10 @@ serverMsg =
     moveResult =
       eitherResult moveError moveOk
       |> Json.Decode.map (Msg.InRoom << Msg.MoveResult)
+
+    newGameStarted =
+      Json.Decode.field "gameStartedBy" Json.Decode.string
+      |> Json.Decode.map (\by -> Msg.InRoom (Msg.NewGameStarted { by = by }))
   in
   variantWithFields
     { name = "serverMsg" }
@@ -380,6 +387,7 @@ serverMsg =
     , ( "UpdateRack", WithContents updateRack )
     , ( "MoveResult", WithContents moveResult )
     , ( "GameOver", Plain (Msg.InRoom Msg.GameOver) )
+    , ( "NewGameStarted", WithFieldsInline newGameStarted )
     ]
 
 fromJS : Json.Decode.Decoder Msg.OneMsg

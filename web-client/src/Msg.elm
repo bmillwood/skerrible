@@ -47,8 +47,10 @@ type RoomMsg
   | SendProposal
   | SendPass
   | SendUndo
+  | SendStartNewGame
   | MoveResult (Result Move.Error ())
   | GameOver
+  | NewGameStarted { by : String }
   | ClearMoveError
   | SetTransientError (Maybe Model.TransientError)
   | SetHelpVisible Bool

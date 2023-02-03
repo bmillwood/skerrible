@@ -11,6 +11,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty((:|)))
 import qualified Data.Map as Map
 import Data.Map (Map)
+import Data.Monoid (Endo (Endo), appEndo)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Data.Maybe
@@ -218,42 +219,58 @@ data GameState
     , rng :: Random.StdGen
     }
 
-newtype Game = Game { gameHistory :: NonEmpty GameState }
+data Game
+  = Game
+    { settings :: RoomSettings
+    , gameHistory :: NonEmpty GameState
+    }
 
 latestState :: Game -> GameState
 latestState Game{ gameHistory = x :| _ } = x
 
 addState :: GameState -> Game -> Game
-addState st Game{ gameHistory } = Game{ gameHistory = NonEmpty.cons st gameHistory }
+addState st game@Game{ gameHistory } =
+  game{ gameHistory = NonEmpty.cons st gameHistory }
 
 setLatestState :: GameState -> Game -> Game
-setLatestState x Game{ gameHistory = _ :| xs } = Game{ gameHistory = x :| xs }
+setLatestState x game@Game{ gameHistory = _ :| xs } = game{ gameHistory = x :| xs }
 
 undo :: Game -> Maybe Game
-undo Game{ gameHistory = _ :| past } = Game <$> NonEmpty.nonEmpty past
+undo game@Game{ gameHistory = _ :| oldHistory } = do
+  gameHistory <- NonEmpty.nonEmpty oldHistory
+  return game{ gameHistory }
+
+newGameState :: Set Username -> RoomSettings -> Random.StdGen -> GameState
+newGameState players settings@RoomSettings{ turnEnforcement } rng =
+  appEndo (foldMap (Endo . fillRack) players)
+  $ GameState
+    { players = Map.fromSet (const newPlayer) players
+    , turns =
+        case turnEnforcement of
+          NoEnforcement ->
+            NoTurns
+          LetPlayersChoose ->
+            Turns
+              { prevMover = Nothing
+              , mustFollow = Map.empty
+              , notMovedYet = Set.empty
+              }
+    , board = newBoard settings
+    , gameOver = False
+    , bag = fmap tileCount tileData
+    , rng
+    }
 
 createGame :: RoomSettings -> Random.StdGen -> Game
-createGame settings@RoomSettings{ turnEnforcement } rng =
-  Game
-  $ GameState
-      { players = Map.empty
-      , turns =
-          case turnEnforcement of
-            NoEnforcement ->
-              NoTurns
-            LetPlayersChoose ->
-              Turns
-                { prevMover = Nothing
-                , mustFollow = Map.empty
-                , notMovedYet = Set.empty
-                }
-      , board = newBoard settings
-      , gameOver = False
-      , bag = fmap tileCount tileData
-      , rng
-      }
-    :| []
+createGame settings rng =
+  Game { settings, gameHistory = newGameState Set.empty settings rng :| [] }
+
+startNewGame :: Game -> Game
+startNewGame
+  game@Game{ settings, gameHistory = history@(GameState { players, rng } :| _) }
+  = game{ gameHistory = NonEmpty.cons newGame history }
   where
+    newGame = newGameState (Map.keysSet players) settings rng
 
 scores :: GameState -> Map Username Integer
 scores GameState{ players } = Map.map score players

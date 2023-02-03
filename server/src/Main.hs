@@ -8,7 +8,7 @@ module Main (main) where
 import Control.Concurrent.Async
 import Control.Concurrent
 import Control.Exception
-import Control.Lens (ifor_)
+import Control.Lens (ifoldMap)
 import Control.Monad
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except
@@ -227,28 +227,34 @@ data Message
   | Targeted Username ToClient
   | Broadcast ToClient
 
-sendMessages :: [Message] -> Writer (Endo [Message]) ()
+type Messages = Endo [Message]
+
+sendMessages :: [Message] -> Writer Messages ()
 sendMessages = tell . Endo . (++)
 
-getMessages :: Endo [Message] -> [Message]
+getMessages :: Messages -> [Message]
 getMessages (Endo k) = k []
+
+runMessages :: RoomCode -> RoomState -> [Message] -> IO ()
+runMessages roomCode RoomState{ clients } = do
+  mapM_ $ \case
+    Server s -> print (roomCode, s)
+    Targeted u tc -> sendToClient roomCode clients u tc
+    Broadcast tc -> broadcast roomCode clients tc
 
 modifyGame
   :: Undoable
   -> Room
-  -> (GameState -> Writer (Endo [Message]) (GameState, a))
+  -> (GameState -> Writer Messages (GameState, a))
   -> IO a
 modifyGame undoable Room{ roomCode, roomState } change = do
-  modifyMVar roomState $ \state@RoomState{ clients, game } -> do
+  modifyMVar roomState $ \state@RoomState{ game } -> do
     let
       ((nextState, result), messages) = runWriter (change (latestState game))
       apply = case undoable of
         CanUndo -> addState
         CannotUndo -> setLatestState
-    forM_ (getMessages messages) $ \case
-      Server s -> print (roomCode, s)
-      Targeted u tc -> sendToClient roomCode clients u tc
-      Broadcast tc -> broadcast roomCode clients tc
+    runMessages roomCode state (getMessages messages)
     return (state{ game = apply nextState game }, result)
 
 applyUndo :: Room -> Username -> IO ()
@@ -261,15 +267,11 @@ applyUndo Room{ roomCode, roomState } username = do
       Nothing -> do
         return state
       Just undone -> do
-        let latest@GameState{ board = uBoard, players = uPlayers } = latestState undone
-        ifor_ uPlayers $ \uName PlayerState{ rack } ->
-          sendToClient roomCode clients uName (UpdateRack rack)
-        mapM_ (broadcast roomCode clients)
-          [ Scores (scores latest)
-          , UpdateBoard uBoard
-          , PlayerMoved { movePlayer = username, moveReport = Undone }
-          ]
-        return state{ game = undone }
+        let newState = state{ game = undone }
+        recap roomCode newState
+        runMessages roomCode newState
+          [ Broadcast $ PlayerMoved { movePlayer = username, moveReport = Undone } ]
+        return newState
 
 addClient :: Maybe Client -> IO (Chan ToClient, Maybe Client)
 addClient Nothing = do
@@ -306,6 +308,21 @@ joinedRoom room@Room{ roomState, roomCode, setStale } conn username = do
   () <- absurd readDoesNotReturn
   absurd neitherDoesWrite
 
+recap :: RoomCode -> RoomState -> IO ()
+recap roomCode state@RoomState{ game } =
+  runMessages roomCode state
+    (map Broadcast broadcasts ++ rackMessages)
+  where
+    gameState@GameState{ board, players } = latestState game
+    broadcasts =
+      [ Scores (scores gameState)
+      , UpdateBoard board
+      ]
+    rackMessages =
+      ifoldMap
+        (\u PlayerState{ rack } -> [Targeted u (UpdateRack rack)])
+        players
+
 clientRead :: Room -> WS.Connection -> Username -> IO Void
 clientRead room@Room{ roomCode, roomState } conn username = forever $ do
   msg <- readFromClient conn
@@ -321,6 +338,15 @@ clientRead room@Room{ roomCode, roomState } conn username = forever $ do
           , Targeted username (UpdateRack rack)
           ]
         return (withPlayer, ())
+    Just StartNewGame ->
+      modifyMVar roomState $ \state@RoomState{ game } -> do
+        let
+          newGame = startNewGame game
+          newState = state{ game = newGame }
+        recap roomCode newState
+        runMessages roomCode newState
+          [ Broadcast NewGameStarted{ gameStartedBy = username } ]
+        return (newState, ())
     Just Chat{ msgToSend } ->
       case validChat msgToSend of
         Just chatError -> do

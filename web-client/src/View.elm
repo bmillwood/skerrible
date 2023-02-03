@@ -515,6 +515,18 @@ viewChatting { me, messageEntry, history } { spectators } =
               ( ""
               , [ Html.strong [] [ Html.text "The game has ended!" ] ]
               )
+            Model.NewGameStarted { by } ->
+              ( ""
+              , [ Html.strong [] [ Html.text by, Html.text " started a new game" ]
+                , Html.text " (if you didn't want this, "
+                , Html.a
+                    [ Attributes.href "#"
+                    , Events.onClick [Msg.InRoom Msg.SendUndo]
+                    ]
+                    [ Html.text "undo it" ]
+                , Html.text ")"
+                ]
+              )
       in
       Html.tr
         []
@@ -687,6 +699,9 @@ view { error, state } =
                       [ Html.button
                           [ Events.onClick [Msg.InRoom Msg.SendUndo] ]
                           [ Html.text "Undo" ]
+                      , Html.button
+                          [ Events.onClick [Msg.InRoom Msg.SendStartNewGame] ]
+                          [ Html.text "Start new game" ]
                       ]
                   , Html.hr [ Attributes.style "clear" "both" ] []
                   , viewError game.moveError
