@@ -468,6 +468,8 @@ viewChatting { me, messageEntry, history } { spectators } =
                     , Attributes.placeholder "chat"
                     , Attributes.value messageEntry
                     , Events.onInput (\s -> [Msg.InRoom (Msg.ComposeMessage s)])
+                    , Events.onFocus [Msg.InRoom (Msg.SetUseKeysForGame False)]
+                    , Events.onBlur [Msg.InRoom (Msg.SetUseKeysForGame True)]
                     ]
                     []
                 ]

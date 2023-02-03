@@ -98,6 +98,7 @@ updatePreLogin msg model state =
                   , moveError = Nothing
                   , transientError = Nothing
                   , showHelp = True
+                  , useKeysForGame = True
                   }
               , roomCode = code
               }
@@ -254,6 +255,8 @@ updateRoom msg model ({ chat, game } as state) =
       )
     Msg.SetHelpVisible showHelp ->
       ( setGame { game | showHelp = showHelp }, Cmd.none )
+    Msg.SetUseKeysForGame useKeysForGame ->
+      ( setGame { game | useKeysForGame = useKeysForGame }, Cmd.none )
 
 updateOne : Msg.OneMsg -> Model -> (Model, Cmd Msg)
 updateOne msg model =
@@ -330,8 +333,8 @@ updateProposal board rack proposal proposalUpdate =
     (Move.ProposeExchange tiles, Msg.CancelProposal) ->
       cancelProposalIfEmpty tiles
 
-handleKey : Json.Decode.Decoder Msg
-handleKey =
+handleKeyForGame : Json.Decode.Decoder Msg
+handleKeyForGame =
   let
     updateP u = [Msg.InRoom (Msg.UpdateProposal u)]
     ofKey key =
@@ -350,22 +353,28 @@ handleKey =
 subscriptions : Model -> Sub Msg
 subscriptions model =
   let
-    ifPlaying decoder =
+    ifInRoom decoder =
       case model.state of
         Model.PreLogin _ -> Json.Decode.succeed Msg.doNothing
-        Model.InRoom _ -> decoder
-    clearError = ifPlaying (Json.Decode.succeed [Msg.InRoom (Msg.SetTransientError Nothing)])
+        Model.InRoom room -> decoder room
+    clearError =
+      case model.state of
+        Model.PreLogin _ -> Msg.doNothing
+        Model.InRoom _ -> [Msg.InRoom (Msg.SetTransientError Nothing)]
   in
   Sub.batch
     [ Ports.subscriptions model
-    , Browser.Events.onKeyDown (ifPlaying handleKey)
-    , Browser.Events.onKeyUp clearError
-    , Browser.Events.onMouseUp clearError
-    , Browser.Events.onVisibilityChange (\_ ->
-          case model.state of
-            Model.PreLogin _ -> Msg.doNothing
-            Model.InRoom _ -> [Msg.InRoom (Msg.SetTransientError Nothing)]
-        )
+    , Browser.Events.onKeyDown (
+        case model.state of
+          Model.PreLogin _ -> Json.Decode.succeed Msg.doNothing
+          Model.InRoom room ->
+            if room.game.useKeysForGame
+            then handleKeyForGame
+            else Json.Decode.succeed Msg.doNothing
+      )
+    , Browser.Events.onKeyUp (Json.Decode.succeed clearError)
+    , Browser.Events.onMouseUp (Json.Decode.succeed clearError)
+    , Browser.Events.onVisibilityChange (\_ -> clearError)
     ]
 
 main =

@@ -52,6 +52,7 @@ type RoomMsg
   | ClearMoveError
   | SetTransientError (Maybe Model.TransientError)
   | SetHelpVisible Bool
+  | SetUseKeysForGame Bool
 
 type OneMsg
   = Global GlobalMsg

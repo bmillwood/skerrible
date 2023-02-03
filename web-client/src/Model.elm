@@ -26,6 +26,7 @@ type alias Game =
   , moveError : Maybe Move.Error
   , transientError : Maybe TransientError
   , showHelp : Bool
+  , useKeysForGame : Bool
   }
 
 type alias Chat =
