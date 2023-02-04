@@ -579,13 +579,29 @@ viewHelp =
     ]
 
 view : Model.Model -> Browser.Document Msg
-view { error, state } =
+view { error, state, showAbout, muted } =
   let
     title =
       [ [ Html.text "skerrible | "
         , Html.a
-            [ Attributes.href "https://github.com/bmillwood/skerrible" ]
-            [ Html.text "github" ]
+            [ Attributes.href "#"
+            , Events.onClick [Msg.Global (Msg.SetShowAbout (not showAbout))]
+            ]
+            [ Html.text
+              <| if showAbout
+                  then "return"
+                  else "about"
+            ]
+        , Html.text " | "
+        , Html.a
+            [ Attributes.href "#"
+            , Events.onClick [Msg.Global (Msg.SetMuted (not muted))]
+            ]
+            [ Html.text
+              <| if muted
+                  then "unmute"
+                  else "mute"
+            ]
         ]
       , case state of
           Model.PreLogin _ -> []
@@ -632,6 +648,28 @@ view { error, state } =
                   [ Html.text "clear" ]
               ]
           ]
+
+    aboutDisplay =
+      [ Html.p
+          []
+          [ Html.text "skerrible is on "
+          , Html.a
+              [ Attributes.href "https://github.com/bmillwood/skerrible" ]
+              [ Html.text "github" ]
+          ]
+      , Html.p
+          []
+          [ Html.text "the move sound is a "
+          , Html.a
+              [ Attributes.href "https://github.com/bmillwood/skerrible/blob/main/web-client/make-media.sh" ]
+              [ Html.text "lightly modified" ]
+          , Html.text " sound by "
+          , Html.a
+              [ Attributes.href "https://freesound.org/people/jakebagger/sounds/499782/" ]
+              [ Html.text "Jake Bagger" ]
+          , Html.text ", used under CC-BY 4.0"
+          ]
+      ]
 
     stateDisplay =
       [ case state of
@@ -715,5 +753,9 @@ view { error, state } =
       ]
   in
   { title = "Skerrible"
-  , body = title ++ errorDisplay ++ stateDisplay
+  , body =
+      [ title
+      , errorDisplay
+      , if showAbout then aboutDisplay else stateDisplay
+      ] |> List.concat
   }

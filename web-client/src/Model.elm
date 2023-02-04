@@ -99,6 +99,8 @@ type State
 
 type alias Model =
   { navKey : Browser.Navigation.Key
+  , muted : Bool
+  , showAbout : Bool
   , error : Maybe String
   , state : State
   }

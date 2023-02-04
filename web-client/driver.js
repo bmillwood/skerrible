@@ -1,3 +1,4 @@
+const audioFiles = {};
 var socket;
 var app = Elm.Main.init({
     // flags: {}
@@ -21,6 +22,11 @@ app.ports.sendToJS.subscribe(function(request) {
         break;
     case 'send':
         socket.send(JSON.stringify(request.payload));
+        break;
+    case 'playAudio':
+        const url = request.payload;
+        audioFiles[url] = audioFiles[url] || new Audio(url);
+        audioFiles[url].play();
         break;
     }
 });

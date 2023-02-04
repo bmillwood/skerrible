@@ -13,6 +13,8 @@ import Move exposing (Move)
 
 type GlobalMsg
   = SetError (Maybe String)
+  | SetMuted Bool
+  | SetShowAbout Bool
   | BlurById String
   | UrlRequest Browser.UrlRequest
   | UrlChange Url

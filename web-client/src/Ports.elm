@@ -5,6 +5,7 @@ import Dict exposing (Dict)
 import Json.Decode
 import Json.Encode
 import Set exposing (Set)
+import Url exposing (Url)
 
 import Board exposing (Board)
 import DictTile exposing (DictTile)
@@ -29,6 +30,9 @@ connect { endpoint } = request { kind = "connect", payload = Json.Encode.string 
 
 send : Json.Encode.Value -> Cmd msg
 send value = request { kind = "send", payload = value }
+
+playAudio : { url : String } -> Cmd msg
+playAudio { url } = request { kind = "playAudio", payload = Json.Encode.string url }
 
 withTag : String -> List (String, Json.Encode.Value) -> Json.Encode.Value
 withTag tag fields =

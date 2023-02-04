@@ -17,6 +17,7 @@ type alias Flags =
   , room : Maybe String
   , autoLogin : Bool
   , turns : Model.TurnEnforcement
+  , muted : Bool
   }
 
 defaults : Flags
@@ -27,6 +28,7 @@ defaults =
   , room = Nothing
   , autoLogin = False
   , turns = Model.LetPlayersChoose
+  , muted = False
   }
 
 type alias QueryParams =
@@ -34,6 +36,7 @@ type alias QueryParams =
   , room : Maybe String
   , autoLogin : Maybe Bool
   , turns : Maybe Model.TurnEnforcement
+  , muted : Maybe Bool
   }
 
 queryParser =
@@ -49,12 +52,13 @@ queryParser =
           ]
         )
   in
-  Url.Parser.Query.map4
+  Url.Parser.Query.map5
     QueryParams
     (Url.Parser.Query.string "username")
     (Url.Parser.Query.string "room")
     (bool "autoLogin")
     turns
+    (bool "muted")
 
 protocolWorkaround : { replaceWith : String } -> String -> (String, String)
 protocolWorkaround { replaceWith } url =
@@ -84,13 +88,14 @@ parseUrl url =
   in
   Url.Parser.parse (Url.Parser.query queryParser) { url | path = "" }
   |> Result.fromMaybe ("Query parser failed on url: " ++ Url.toString url)
-  |> Result.map (\{ username, room, autoLogin, turns } ->
+  |> Result.map (\{ username, room, autoLogin, turns, muted } ->
       { error = Nothing
       , username = Maybe.withDefault defaults.username username
       , room = room
       , autoLogin = Maybe.withDefault defaults.autoLogin autoLogin
       , endpoint = endpoint
       , turns = Maybe.withDefault defaults.turns turns
+      , muted = Maybe.withDefault defaults.muted muted
       }
     )
   |> handleError

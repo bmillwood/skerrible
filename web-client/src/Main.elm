@@ -26,11 +26,13 @@ import View
 init : () -> Url -> Browser.Navigation.Key -> (Model, Cmd Msg)
 init () url navKey =
   let
-    { error, endpoint, username, room, autoLogin, turns }
+    { error, endpoint, username, room, autoLogin, turns, muted }
       = UrlParser.parseUrl url
   in
   ( { error = error
     , navKey = navKey
+    , muted = muted
+    , showAbout = False
     , state =
         Model.PreLogin
           { loginState = Model.NotSubmitted
@@ -140,7 +142,9 @@ updateRoom msg model ({ chat, game } as state) =
     Msg.SendJoin -> ( model, Ports.joinGame )
     Msg.ReceiveMove moveReport ->
       ( setChat { chat | history = Model.PlayerMoved moveReport :: chat.history }
-      , Cmd.none
+      , if model.muted
+        then Cmd.none
+        else Ports.playAudio { url = "/media/place.mp3" }
       )
     Msg.GameOver ->
       ( setChat { chat | history = Model.GameOver :: chat.history }
@@ -268,6 +272,10 @@ updateOne msg model =
   case msg of
     Msg.Global (Msg.SetError e) ->
       ( { model | error = e }, Cmd.none )
+    Msg.Global (Msg.SetMuted m) ->
+      ( { model | muted = m }, Cmd.none )
+    Msg.Global (Msg.SetShowAbout a) ->
+      ( { model | showAbout = a }, Cmd.none )
     Msg.Global (Msg.BlurById blurId) ->
       ( model
       , Task.attempt (\_ -> Msg.doNothing) (Browser.Dom.blur blurId)
