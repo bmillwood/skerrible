@@ -17,5 +17,6 @@ FROM alpine:3
 RUN apk add gmp libffi
 WORKDIR /opt/skerrible
 COPY web-client/*.js web-client/*.html static-root/
+COPY web-client/media/* static-root/media/
 COPY --from=build /opt/skerrible/bin .
 CMD ["./skerrible-server", "static-root"]
