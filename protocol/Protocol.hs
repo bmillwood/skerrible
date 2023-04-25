@@ -1,5 +1,7 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE NamedFieldPuns #-}
 module Protocol where
 
@@ -17,28 +19,23 @@ portNumber = 4170
 data Tile
   = Letter Char
   | Blank
-  deriving (Eq, Generic, Ord, Show)
-
-instance Aeson.FromJSON Tile
-instance Aeson.ToJSON Tile
-instance Aeson.FromJSONKey Tile
-instance Aeson.ToJSONKey Tile
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass
+    ( Aeson.FromJSON, Aeson.ToJSON
+    , Aeson.FromJSONKey, Aeson.ToJSONKey
+    )
 
 data TileData
   = TileData
     { tileScore :: Integer
     , tileCount :: Integer
     }
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON TileData
-instance Aeson.ToJSON TileData
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 newtype Rack = Rack [Tile]
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON Rack
-instance Aeson.ToJSON Rack
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data Square
   = Square
@@ -46,42 +43,32 @@ data Square
     , wordMult :: Integer
     , squareTile :: Maybe Tile
     }
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON Square
-instance Aeson.ToJSON Square
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data Pos = Pos Integer Integer
-  deriving (Eq, Generic, Ord, Show)
-
-instance Aeson.FromJSON Pos
-instance Aeson.ToJSON Pos
-
--- these instances are arguably not optimal, but they sure are convenient
-instance Aeson.ToJSONKey Pos
-instance Aeson.FromJSONKey Pos
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass
+    ( Aeson.FromJSON, Aeson.ToJSON
+    -- these instances are arguably not optimal, but they sure are convenient
+    , Aeson.FromJSONKey, Aeson.ToJSONKey
+    )
 
 newtype Board = Board (Map Pos Square)
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON Board
-instance Aeson.ToJSON Board
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data MoveDirection
   = MoveRight
   | MoveDown
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON MoveDirection
-instance Aeson.ToJSON MoveDirection
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data MoveTile
   = PlaceTile Tile
   | UseBoard
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON MoveTile
-instance Aeson.ToJSON MoveTile
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data Move
   = Move
@@ -89,10 +76,8 @@ data Move
     , direction :: MoveDirection
     , tiles :: [MoveTile]
     }
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON Move
-instance Aeson.ToJSON Move
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data MoveError
   = YouAreNotPlaying
@@ -107,50 +92,39 @@ data MoveError
   | DoesNotConnect
   | NotAWord (NonEmpty Move)
   | NotEnoughTilesToExchange
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON MoveError
-instance Aeson.ToJSON MoveError
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 newtype Username = Username Text
-  deriving (Eq, Generic, Ord, Show)
-
-instance Aeson.FromJSON Username
-instance Aeson.ToJSON Username
-instance Aeson.FromJSONKey Username
-instance Aeson.ToJSONKey Username
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass
+    ( Aeson.FromJSON, Aeson.ToJSON
+    , Aeson.FromJSONKey, Aeson.ToJSONKey
+    )
 
 newtype RoomCode = RoomCode Text
-  deriving (Eq, Generic, Ord, Show)
-
-instance Aeson.FromJSON RoomCode
-instance Aeson.ToJSON RoomCode
+  deriving stock (Eq, Generic, Ord, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data TurnEnforcement
   = NoEnforcement
   | LetPlayersChoose
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON TurnEnforcement
-instance Aeson.ToJSON TurnEnforcement
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data RoomSettings
   = RoomSettings
     { noBoardMultipliers :: Bool
     , turnEnforcement :: TurnEnforcement
     }
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON RoomSettings
-instance Aeson.ToJSON RoomSettings
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data RoomSpec
   = JoinRoom RoomCode
   | MakeNewRoom RoomSettings
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON RoomSpec
-instance Aeson.ToJSON RoomSpec
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data FromClient
   = LoginRequest { loginRequestName :: Username, roomSpec :: RoomSpec }
@@ -161,16 +135,15 @@ data FromClient
   | Exchange (NonEmpty Tile)
   | Pass
   | Undo
-  deriving (Generic, Show)
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data TechErrorMsg
   = ProtocolError
   | MustNotBeEmpty
   | TooLong { lengthUsed :: Integer, lengthLimit :: Integer }
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON TechErrorMsg
-instance Aeson.ToJSON TechErrorMsg
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 checkTooLong :: Text -> Integer -> Maybe TechErrorMsg
 checkTooLong t lengthLimit
@@ -186,9 +159,6 @@ validUsername (Username u) = checkTooLong u 80
 validChat :: Text -> Maybe TechErrorMsg
 validChat t = checkTooLong t 1000
 
-instance Aeson.FromJSON FromClient
-instance Aeson.ToJSON FromClient
-
 data MoveReport
   = PlayedWord
     { moveWords :: [String]
@@ -197,10 +167,8 @@ data MoveReport
   | Exchanged Integer
   | Passed
   | Undone
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON MoveReport
-instance Aeson.ToJSON MoveReport
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
 
 data ToClient
   = TechnicalError TechErrorMsg
@@ -216,7 +184,5 @@ data ToClient
   | MoveResult (Either MoveError ())
   | GameOver
   | NewGameStarted { gameStartedBy :: Username }
-  deriving (Generic, Show)
-
-instance Aeson.FromJSON ToClient
-instance Aeson.ToJSON ToClient
+  deriving stock (Generic, Show)
+  deriving anyclass (Aeson.FromJSON, Aeson.ToJSON)
