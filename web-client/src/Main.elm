@@ -101,6 +101,7 @@ updatePreLogin msg model state =
                   , transientError = Nothing
                   , showHelp = True
                   , useKeysForGame = True
+                  , gameOver = False
                   }
               , roomCode = code
               }
@@ -124,8 +125,9 @@ updatePreLogin msg model state =
 updateRoom : Msg.RoomMsg -> Model -> Model.RoomState -> (Model, Cmd Msg)
 updateRoom msg model ({ chat, game } as state) =
   let
-    setChat newChat = { model | state = Model.InRoom { state | chat = newChat } }
-    setGame newGame = { model | state = Model.InRoom { state | game = newGame } }
+    setRoom newRoom = { model | state = Model.InRoom newRoom }
+    setChat newChat = setRoom { state | chat = newChat }
+    setGame newGame = setRoom { state | game = newGame }
     setPlaying newPlaying = setGame { game | playing = Just newPlaying }
   in
   case msg of
@@ -140,18 +142,39 @@ updateRoom msg model ({ chat, game } as state) =
       , Cmd.none
       )
     Msg.SendJoin -> ( model, Ports.joinGame )
-    Msg.ReceiveMove moveReport ->
-      ( setChat { chat | history = Model.PlayerMoved moveReport :: chat.history }
+    Msg.ReceiveMove playerMoved ->
+      ( setRoom
+          { state
+          | chat = { chat | history = Model.PlayerMoved playerMoved :: chat.history }
+          , game =
+              { game
+              -- This seems a bit fragile. But no moves can happen once the game
+              -- has ended, so any undo must un-end the game.
+              | gameOver = game.gameOver && playerMoved.moveReport /= Model.Undone
+              }
+          }
       , if model.muted
         then Cmd.none
         else Ports.playAudio { url = "/media/place.mp3" }
       )
     Msg.GameOver ->
-      ( setChat { chat | history = Model.GameOver :: chat.history }
+      ( setRoom
+          { state
+          | chat = { chat | history = Model.GameOver :: chat.history }
+          , game =
+            { game
+            | gameOver = True
+            , playing = game.playing |> Maybe.map (\p -> { p | proposal = Nothing })
+            }
+          }
       , Cmd.none
       )
     Msg.NewGameStarted { by } ->
-      ( setChat { chat | history = Model.NewGameStarted { by = by } :: chat.history }
+      ( setRoom
+          { state
+          | chat = { chat | history = Model.NewGameStarted { by = by } :: chat.history }
+          , game = { game | gameOver = False }
+          }
       , Cmd.none
       )
     Msg.UpdateBoard newBoard ->
@@ -190,7 +213,9 @@ updateRoom msg model ({ chat, game } as state) =
     Msg.SetTransientError newTransientError ->
       ( setGame { game | transientError = newTransientError }, Cmd.none )
     Msg.UpdateProposal proposalUpdate ->
-      case game.playing of
+      if game.gameOver
+      then ( model, Cmd.none )
+      else case game.playing of
         Nothing -> ( model, Cmd.none )
         Just { proposal, rack } ->
           case proposal of

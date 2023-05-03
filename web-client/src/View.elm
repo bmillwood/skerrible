@@ -225,9 +225,10 @@ viewBoard
      , tileData : DictTile Board.TileData
      , proposedMove : Maybe Move
      , transientError : Maybe Model.TransientError
+     , gameOver : Bool
      }
   -> Html Msg
-viewBoard { board, tileData, proposedMove, transientError } =
+viewBoard { board, tileData, proposedMove, transientError, gameOver } =
   let
     { top, left, squares } = board
     square rowIx colIx sq =
@@ -267,7 +268,9 @@ viewBoard { board, tileData, proposedMove, transientError } =
         attributes =
           [ [ Attributes.style "background-color" bgColor
             , Events.onClick (
-                case proposedMove of
+                if gameOver
+                then []
+                else case proposedMove of
                   Nothing -> proposeMove (newMove Move.Right)
                   Just { startRow, startCol, direction, tiles } ->
                     if not (List.isEmpty tiles)
@@ -382,10 +385,11 @@ viewRack
   :  { rack : Board.Rack
      , tileData : DictTile Board.TileData
      , proposedExchange : Maybe (List Board.Tile)
+     , gameOver : Bool
      , rackError : Bool
      }
   -> Html Msg
-viewRack { rack, tileData, proposedExchange, rackError } =
+viewRack { rack, tileData, proposedExchange, gameOver, rackError } =
   let
     rackTile tile =
       viewTile tile tileData { partOfMove = False, error = False }
@@ -410,10 +414,14 @@ viewRack { rack, tileData, proposedExchange, rackError } =
             ]
             [ Html.tr [] (List.map rackTile rack ++ [ spaceTd ]) ]
         , Html.button
-            [ Events.onClick [Msg.InRoom (Msg.UpdateProposal Msg.UnproposeLast)] ]
+            [ Events.onClick [Msg.InRoom (Msg.UpdateProposal Msg.UnproposeLast)]
+            , Attributes.disabled gameOver
+            ]
             [ Html.text "\u{232b} Backspace" ]
         , Html.button
-            [ Events.onClick [Msg.InRoom (Msg.UpdateProposal Msg.SubmitProposal)] ]
+            [ Events.onClick [Msg.InRoom (Msg.UpdateProposal Msg.SubmitProposal)]
+            , Attributes.disabled gameOver
+            ]
             [ Html.text "\u{21b5} Submit" ]
         ]
     , Html.p
@@ -434,7 +442,7 @@ viewRack { rack, tileData, proposedExchange, rackError } =
               )
             , Attributes.disabled
               <| case proposedExchange of
-                Nothing -> False
+                Nothing -> gameOver
                 Just _ -> True
             ]
             [ Html.text "\u{1f5d1} "
@@ -445,7 +453,9 @@ viewRack { rack, tileData, proposedExchange, rackError } =
                   "Exchanging " ++ String.fromList (List.map Board.tileToChar tiles)
             ]
         , Html.button
-            [ Events.onClick [Msg.InRoom Msg.SendPass] ]
+            [ Events.onClick [Msg.InRoom Msg.SendPass]
+            , Attributes.disabled gameOver
+            ]
             [ Html.text "\u{1f937} Pass" ]
         ]
     ]
@@ -696,6 +706,7 @@ view { error, state, showAbout, muted } =
                         Just (Move.ProposeMove move) -> Just move
                         Just (Move.ProposeExchange _) -> Nothing
                   , transientError = game.transientError
+                  , gameOver = game.gameOver
                   }
 
               rackOrJoin =
@@ -717,6 +728,7 @@ view { error, state, showAbout, muted } =
                               Nothing -> Nothing
                               Just (Move.ProposeMove _) -> Nothing
                               Just (Move.ProposeExchange tiles) -> Just tiles
+                        , gameOver = game.gameOver
                         , rackError = game.transientError == Just Model.RackError
                         }
                     ]
