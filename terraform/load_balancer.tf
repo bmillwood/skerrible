@@ -6,46 +6,12 @@ resource "aws_lb_target_group" "skerrible" {
   vpc_id = aws_vpc.main.id
 }
 
-resource "aws_s3_bucket" "skerrible_alb_logs" {
-  bucket = "skerrible-alb-logs"
-}
-
-data "aws_elb_service_account" "local" {
-}
-
-resource "aws_s3_bucket_policy" "skerrible_allow_log_write" {
-  bucket = aws_s3_bucket.skerrible_alb_logs.bucket
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-        ]
-        Principal = {
-          AWS = [
-            data.aws_elb_service_account.local.arn,
-          ]
-        }
-        Resource = "${aws_s3_bucket.skerrible_alb_logs.arn}/*"
-      }
-    ]
-  })
-}
-
 resource "aws_lb" "skerrible" {
   name = "skerrible"
   internal = false
   load_balancer_type = "application"
   subnets = [aws_subnet.a.id, aws_subnet.b.id]
   security_groups = [aws_security_group.load_balancer.id]
-
-  access_logs {
-    bucket = aws_s3_bucket.skerrible_alb_logs.bucket
-    enabled = true
-  }
-  depends_on = [aws_s3_bucket_policy.skerrible_allow_log_write]
 }
 
 resource "aws_lb_listener" "skerrible_http" {
