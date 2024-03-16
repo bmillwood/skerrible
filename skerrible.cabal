@@ -16,7 +16,7 @@ maintainer:          thebenmachine+git@gmail.com
 library
   exposed-modules:
     Protocol
-  ghc-options:         -Wall
+  ghc-options:         -Wall -threaded
   build-depends:
     aeson,
     base,
@@ -31,7 +31,7 @@ executable skerrible-server
     Game
     Version
   -- other-extensions:
-  ghc-options:         -Wall
+  ghc-options:         -Wall -threaded
   build-depends:
     skerrible,
     aeson,
@@ -55,7 +55,7 @@ test-suite server-tests
   type:                exitcode-stdio-1.0
   main-is:             test.hs
   other-modules:       Game
-  ghc-options:         -Wall
+  ghc-options:         -Wall -threaded
   build-depends:
     skerrible,
     base,
