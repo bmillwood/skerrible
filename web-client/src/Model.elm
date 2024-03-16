@@ -18,10 +18,15 @@ type alias Playing =
   , proposal : Maybe Move.Proposal
   }
 
+type alias PlayerData =
+  { score : Int
+  , canMove : Bool
+  }
+
 type alias Game =
   { board : Board
   , tileData : DictTile Board.TileData
-  , scores : Dict String Int
+  , players : Dict String PlayerData
   , playing : Maybe Playing
   , moveError : Maybe Move.Error
   , transientError : Maybe TransientError
@@ -46,7 +51,7 @@ type Message
   | LeftRoom String
   | JoinedGame String
   | Chatted Chat
-  | PlayerMoved { player : String, moveReport : MoveReport }
+  | PlayerMoved { player : String, moveReport : MoveReport, next : Set String }
   | GameOver
   | NewGameStarted { by : String }
 

@@ -177,7 +177,11 @@ data ToClient
   | People (Set Username)
   | Scores (Map Username Integer)
   | ChatMessage { chatSentBy :: Username, chatContent :: Text }
-  | PlayerMoved { movePlayer :: Username, moveReport :: MoveReport }
+  | PlayerMoved
+      { movePlayer :: Username
+      , moveReport :: MoveReport
+      , moveNext :: Set Username
+      }
   | UpdateTileData (Map Tile TileData)
   | UpdateBoard Board
   | UpdateRack Rack

@@ -6,6 +6,7 @@ import qualified Control.Lens as Lens
 import Control.Monad (foldM, when)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
+import Data.Either (isRight)
 import Data.Function
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.List.NonEmpty (NonEmpty((:|)))
@@ -404,6 +405,10 @@ advanceTurns username Turns{ prevMover, mustFollow, notMovedYet } =
         , mustFollow = newFollow
         , notMovedYet = Set.delete username notMovedYet
         }
+
+canMoveNext :: GameState -> Set Username
+canMoveNext GameState{ players, turns } =
+  Set.filter (\u -> isRight (advanceTurns u turns)) (Map.keysSet players)
 
 takeTurn :: Username -> StateT GameState (Either MoveError) ()
 takeTurn username = do

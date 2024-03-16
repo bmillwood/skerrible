@@ -270,7 +270,13 @@ applyUndo Room{ roomCode, roomState } username = do
         let newState = state{ game = undone }
         recap roomCode newState
         runMessages roomCode newState
-          [ Broadcast $ PlayerMoved { movePlayer = username, moveReport = Undone } ]
+          [ Broadcast
+            $ PlayerMoved
+              { movePlayer = username
+              , moveReport = Undone
+              , moveNext = canMoveNext (latestState undone)
+              }
+          ]
         return newState
 
 addClient :: Maybe Client -> IO (Chan ToClient, Maybe Client)
@@ -372,7 +378,12 @@ clientRead room@Room{ roomCode, roomState } conn username = forever $ do
               Just PlayerState{ rack } ->
                 sendMessages [Targeted username (UpdateRack rack)]
             sendMessages
-              [ Broadcast $ PlayerMoved { movePlayer = username, moveReport }
+              [ Broadcast
+                $ PlayerMoved
+                  { movePlayer = username
+                  , moveReport
+                  , moveNext = canMoveNext nextGame
+                  }
               , Broadcast $ Scores (scores nextGame)
               , Broadcast $ UpdateBoard board
               ]

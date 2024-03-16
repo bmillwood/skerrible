@@ -330,14 +330,20 @@ viewBoard { board, tileData, proposedMove, transientError, gameOver } =
     (boardErrorAttributes ++ [ Attributes.style "float" "left" ])
     (headerRow :: List.indexedMap tableRow (Array.toList squares))
 
-viewScores : Dict String Int -> Html msg
-viewScores scores =
+viewPlayers : Dict String Model.PlayerData -> Html msg
+viewPlayers players =
+  let
+    allCanMove = List.all .canMove (Dict.values players)
+  in
   Html.table [] (
-    Dict.toList scores
-    |> List.sortBy (\(_, score) -> -score)
-    |> List.map (\(person, score) ->
+    Dict.toList players
+    |> List.sortBy (\(_, p) -> -p.score)
+    |> List.map (\(person, { score, canMove }) ->
           Html.tr
-            []
+            (if canMove && not allCanMove
+              then [ Attributes.style "background-color" "yellow" ]
+              else []
+            )
             [ Html.td [] [ Html.text person ]
             , Html.td [] [ Html.text (String.fromInt score) ]
             ]
@@ -736,14 +742,14 @@ view { error, state, showAbout, muted } =
               spectators =
                 Set.diff
                   chat.folks
-                  (Set.fromList (Dict.keys game.scores))
+                  (Set.fromList (Dict.keys game.players))
             in
             Html.div
               []
               (List.concat
                 [ [ roomCodeDisplay
                   , boardDisplay
-                  , viewScores game.scores
+                  , viewPlayers game.players
                   , Html.div
                       []
                       [ Html.button

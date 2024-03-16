@@ -296,12 +296,15 @@ serverMsg =
         , ( "Undone", Plain Model.Undone )
         ]
     playerMoved =
-      Json.Decode.map2
-        (\player report ->
-          Msg.InRoom (Msg.ReceiveMove { player = player, moveReport = report })
+      Json.Decode.map3
+        (\player report next ->
+          Msg.InRoom (Msg.ReceiveMove { player = player, moveReport = report, next = next })
         )
         (Json.Decode.field "movePlayer" Json.Decode.string)
         (Json.Decode.field "moveReport" moveReport)
+        (Json.Decode.field "moveNext" (
+          Json.Decode.list Json.Decode.string |> Json.Decode.map Set.fromList
+        ))
 
     tileData =
       Json.Decode.map2

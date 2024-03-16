@@ -95,7 +95,7 @@ updatePreLogin msg model state =
               , game =
                   { board = Board.empty
                   , tileData = DictTile.empty
-                  , scores = Dict.empty
+                  , players = Dict.empty
                   , playing = Nothing
                   , moveError = Nothing
                   , transientError = Nothing
@@ -151,6 +151,10 @@ updateRoom msg model ({ chat, game } as state) =
               -- This seems a bit fragile. But no moves can happen once the game
               -- has ended, so any undo must un-end the game.
               | gameOver = game.gameOver && playerMoved.moveReport /= Model.Undone
+              , players =
+                  Dict.map
+                    (\who v -> { v | canMove = Set.member who playerMoved.next })
+                    game.players
               }
           }
       , if model.muted
@@ -272,17 +276,26 @@ updateRoom msg model ({ chat, game } as state) =
       )
     Msg.UpdateScores newScores ->
       let
-        newPlayers =
+        newUsernames =
           Set.diff
             (Set.fromList (Dict.keys newScores))
-            (Set.fromList (Dict.keys game.scores))
-          |> Set.toList |> List.map Model.JoinedGame
+            (Set.fromList (Dict.keys game.players))
+        joinedMsgs = List.map Model.JoinedGame (Set.toList newUsernames)
+        updatedPlayers =
+          Dict.map
+            (\who player ->
+              { player
+              | score = Dict.get who newScores |> Maybe.withDefault player.score
+              }
+            )
+            game.players
+        newPlayers = Dict.map (\who score -> { score = score, canMove = True }) newScores
       in
       ( { model
         | state = Model.InRoom
             { state
-            | chat = { chat | history = newPlayers ++ chat.history }
-            , game = { game | scores = newScores }
+            | chat = { chat | history = joinedMsgs ++ chat.history }
+            , game = { game | players = Dict.union updatedPlayers newPlayers }
             }
         }
       , Cmd.none
