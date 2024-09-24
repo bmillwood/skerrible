@@ -159,7 +159,7 @@ updateRoom msg model ({ chat, game } as state) =
           }
       , if model.muted
         then Cmd.none
-        else Ports.playAudio { url = "/media/place.mp3" }
+        else Ports.playAudio { url = "media/place.mp3" }
       )
     Msg.GameOver ->
       ( setRoom
