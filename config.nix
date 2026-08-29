@@ -34,9 +34,12 @@ in
         ExecStart = "${skerrible}/bin/skerrible-server ${webClient}";
       };
     };
-    services.nginx.virtualHosts.${cfg.virtualHost}.locations.${cfg.location} = {
-      proxyPass = "http://localhost:4170/";
-      proxyWebsockets = true;
+    services.nginx = {
+      enable = true;
+      virtualHosts.${cfg.virtualHost}.locations.${cfg.location} = {
+        proxyPass = "http://localhost:4170/";
+        proxyWebsockets = true;
+      };
     };
   };
 }
