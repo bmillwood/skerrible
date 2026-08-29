@@ -3,7 +3,7 @@ Fun fact: the rules of a board game are not protected intellectual property. As
 long as you don't:
 
 - copy a particular written account of the rules,
-- any graphics or branding content from the original game,
+- use any graphics or branding content from the original game,
 - violate the trademark by creating something that could reasonably be mistaken
   for the original,
 
