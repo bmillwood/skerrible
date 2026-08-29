@@ -16,7 +16,7 @@ in
 
       location = mkOption {
         type = types.str;
-        default = "";
+        default = "/";
       };
     };
   };
