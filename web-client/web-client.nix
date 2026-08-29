@@ -10,7 +10,7 @@ stdenvNoCC.mkDerivation {
   ];
   configurePhase = elmPackages.fetchElmDeps {
     elmPackages = import ./elm-srcs.nix;
-    elmVersion = "0.19.1";
+    elmVersion = elmPackages.elm.version;
     registryDat = ./registry.dat;
   };
   placeSound = builtins.fetchurl {
