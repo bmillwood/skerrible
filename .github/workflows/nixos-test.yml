@@ -10,7 +10,7 @@ env:
 jobs:
   test:
     # nb. ${{ true && '' || 'cachix' }} gives 'cachix'
-    environment: ${{ github.event_name != 'pull_request' && 'cachix' || '' }}
+    environment: ${{ github.ref == 'refs/heads/main' && 'default-branch' || '' }}
     runs-on: ubuntu-latest
     defaults:
       run:
