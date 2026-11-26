@@ -9,6 +9,8 @@ env:
 
 jobs:
   test:
+    # nb. ${{ true && '' || 'cachix' }} gives 'cachix'
+    environment: ${{ github.event_name != 'pull_request' && 'cachix' || '' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -23,6 +25,12 @@ jobs:
           extra_nix_config: |
             extra-experimental-features = auto-allocate-uids cgroups nix-command
             auto-allocate-uids = true
+
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: bmillwood
+          signingKey: ${{ secrets.CACHIX_SIGNING_KEY }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - run: nix config show
 
